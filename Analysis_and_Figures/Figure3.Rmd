@@ -1,0 +1,732 @@
+---
+title: "Figure3"
+author: "Lyu"
+date: "2024-06-20"
+output: html_document
+---
+
+```{r}
+library(Seurat)
+library(tidyverse)
+library(scales)
+```
+
+```{r cellular barcode retrieval}
+# the following commands applies to 2h,4h,6h,8h condtions for cellular barcode retrieval.
+# the retrieved cellular barcode is used to subset bam files. 
+control.data <-  Read10X(data.dir = "./control_filtered_feature_bc_matrix/")
+control <- CreateSeuratObject(counts = control.data, project = "10Xcontrol", min.cells = 3, min.features = 200)
+control_BC <- colnames(control)
+write.table(control_BC,file = 'control_BC.txt',sep = '\t',row.names = F,col.names = F,quote = F)
+```
+
+```{r fig 3c,d}
+# cotrol -------
+control_new_rna <- readRDS('control_new_rna.rds')
+control_old_rna <- readRDS('control_old_rna.rds')
+control_total_rna <- control_new_rna+control_old_rna
+
+# combine nascent and total_control -----
+control_conbine <- control_new_rna
+nascent_name <- paste(rownames(control_new_rna),'N',sep = "-") 
+rownames(control_conbine) <- nascent_name
+control_conbine <- rbind(control_total_rna,control_conbine) 
+
+# mouse_2h -------
+mouse_2h_new_rna <- readRDS('mouse_2h_new_rna.rds')
+mouse_2h_old_rna <- readRDS('mouse_2h_old_rna.rds')
+mouse_2h_total_rna <- mouse_2h_new_rna+mouse_2h_old_rna
+
+# combine nascent and mouse_2h -----
+mouse_2h_conbine <- mouse_2h_new_rna
+nascent_name <- paste(rownames(mouse_2h_new_rna),'N',sep = "-") 
+rownames(mouse_2h_conbine) <- nascent_name
+mouse_2h_conbine <- rbind(mouse_2h_total_rna,mouse_2h_conbine) 
+
+# mouse_4h -------
+mouse_4h_new_rna <- readRDS('mouse_4h_new_rna.rds')
+mouse_4h_old_rna <- readRDS('mouse_4h_old_rna.rds')
+mouse_4h_total_rna <- mouse_4h_new_rna+mouse_4h_old_rna
+
+# combine nascent and mouse_4h -----
+mouse_4h_conbine <- mouse_4h_new_rna
+nascent_name <- paste(rownames(mouse_4h_new_rna),'N',sep = "-") 
+rownames(mouse_4h_conbine) <- nascent_name
+mouse_4h_conbine <- rbind(mouse_4h_total_rna,mouse_4h_conbine) 
+
+# mouse_6h -------
+mouse_6h_new_rna <- readRDS('mouse_6h_new_rna.rds')
+mouse_6h_old_rna <- readRDS('mouse_6h_old_rna.rds')
+mouse_6h_total_rna <- mouse_6h_new_rna+mouse_6h_old_rna
+
+# combine nascent and mouse_6h -----
+mouse_6h_conbine <- mouse_6h_new_rna
+nascent_name <- paste(rownames(mouse_6h_new_rna),'N',sep = "-") 
+rownames(mouse_6h_conbine) <- nascent_name
+mouse_6h_conbine <- rbind(mouse_6h_total_rna,mouse_6h_conbine) 
+
+# mouse_8h -------
+mouse_8h_new_rna <- readRDS('mouse_8h_new_rna.rds')
+mouse_8h_old_rna <- readRDS('mouse_8h_old_rna.rds')
+mouse_8h_total_rna <- mouse_8h_new_rna+mouse_8h_old_rna
+
+# combine nascent and mouse_8h -----
+mouse_8h_conbine <- mouse_8h_new_rna
+nascent_name <- paste(rownames(mouse_8h_new_rna),'N',sep = "-") 
+rownames(mouse_8h_conbine) <- nascent_name
+mouse_8h_conbine <- rbind(mouse_8h_total_rna,mouse_8h_conbine) 
+
+# creat seurat object for total ---------
+control_total <- CreateSeuratObject(counts=control_total_rna, project='control_total', min.cells = 3)
+mouse_2h_total <- CreateSeuratObject(counts=mouse_2h_total_rna, project='mouse_2h_total', min.cells = 3)
+mouse_4h_total <- CreateSeuratObject(counts=mouse_4h_total_rna, project='mouse_4h_total', min.cells = 3)
+mouse_6h_total <- CreateSeuratObject(counts=mouse_6h_total_rna, project='mouse_6h_total', min.cells = 3)
+mouse_8h_total <- CreateSeuratObject(counts=mouse_8h_total_rna, project='mouse_8h_total', min.cells = 3)
+
+# creat seurat object for new ---------
+# control_new <- CreateSeuratObject(counts=control_new_rna, project='control_new', min.cells = 3)
+# mouse_2h_new <- CreateSeuratObject(counts=mouse_2h_new_rna, project='mouse_2h_new', min.cells = 3)
+# mouse_4h_new <- CreateSeuratObject(counts=mouse_4h_new_rna, project='mouse_4h_new', min.cells = 3)
+# mouse_6h_new <- CreateSeuratObject(counts=mouse_6h_new_rna, project='mouse_6h_new', min.cells = 3)
+# mouse_8h_new <- CreateSeuratObject(counts=mouse_8h_new_rna, project='mouse_8h_new', min.cells = 3)
+
+# creat seurat object for combined ---------
+control_combine <- CreateSeuratObject(counts=control_conbine, project='control_combine', min.cells = 3)
+mouse_2h_combine <- CreateSeuratObject(counts=mouse_2h_conbine, project='mouse_2h_combine', min.cells = 3)
+mouse_4h_combine <- CreateSeuratObject(counts=mouse_4h_conbine, project='mouse_4h_combine', min.cells = 3)
+mouse_6h_combine <- CreateSeuratObject(counts=mouse_6h_conbine, project='mouse_6h_combine', min.cells = 3)
+mouse_8h_combine <- CreateSeuratObject(counts=mouse_8h_conbine, project='mouse_8h_combine', min.cells = 3)
+
+
+# combine all dataset for total -------
+group_id <- c('control_total','mouse_2h_total','mouse_4h_total','mouse_6h_total','mouse_8h_total')
+HCL.total <- merge(x=control_total, y=list(mouse_2h_total,mouse_4h_total,mouse_6h_total,mouse_8h_total), add.cell.ids = group_id, project = "total")
+
+# get merged count matrix and meta inforamtion for GRN analysis ------
+HCL.total_counts <-as.data.frame(GetAssayData(object = HCL.total, slot = "counts"))
+saveRDS(HCL.total_counts,file = 'merged.total_counts.rds')
+
+orig.ident_all <- HCL.total_[['orig.ident']]
+orig.ident_all$orig.ident <- c(rep('sti_0h',1014),rep('sti_2h',809),rep('sti_4h',831),rep('sti_6h',1016),rep('sti_8h',359))
+saveRDS(orig.ident_all,file = 'orig.ident_all.rds')
+
+
+# combine all dataset for new -------
+# group_id <- c('control_new','mouse_2h_new','mouse_4h_new','mouse_6h_new','mouse_8h_new')
+# HCL.new <- merge(x=control_new, y=list(mouse_2h_new,mouse_4h_new,mouse_6h_new,mouse_8h_new), add.cell.ids = group_id, project = "new")
+
+# combine all dataset for combined -------
+group_id <- c('control_combine','mouse_2h_combine','mouse_4h_combine','mouse_6h_combine','mouse_8h_combine')
+HCL.combine <- merge(x=control_combine, y=list(mouse_2h_combine,mouse_4h_combine,mouse_6h_combine,mouse_8h_combine), add.cell.ids = group_id, project = "new")
+
+
+# seurat workflow for total ----------
+HCL.total_ <- NormalizeData(HCL.total, normalization.method = "LogNormalize", scale.factor = 10000)
+HCL.total_ <- FindVariableFeatures(HCL.total_, selection.method = "vst", nfeatures = 5000)
+all.genes <- rownames(HCL.total_)
+HCL.total_ <- ScaleData(HCL.total_, features = all.genes)
+HCL.total_ <- RunPCA(object = HCL.total_)
+HCL.total_ <- FindNeighbors(object = HCL.total_, dims = 1:50)
+HCL.total_ <- FindClusters(object = HCL.total_)
+HCL.total_ <- RunUMAP(object = HCL.total_, dims = 1:50)
+HCL.total_ <- RunTSNE(object = HCL.total_, dims = 1:50)
+
+
+# seurat workflow for new ----------
+# HCL.new_ <- NormalizeData(HCL.new, normalization.method = "LogNormalize", scale.factor = 10000)
+# HCL.new_ <- FindVariableFeatures(HCL.new_, selection.method = "vst", nfeatures = 5000)
+# all.genes <- rownames(HCL.new_)
+# HCL.new_ <- ScaleData(HCL.new_, features = all.genes)
+# HCL.new_ <- RunPCA(object = HCL.new_)
+# HCL.new_ <- FindNeighbors(object = HCL.new_, dims = 1:50)
+# HCL.new_ <- FindClusters(object = HCL.new_)
+# HCL.new_ <- RunUMAP(object = HCL.new_, dims = 1:50)
+# HCL.new_ <- RunTSNE(object = HCL.new_, dims = 1:50)
+
+
+# seurat workflow for combine ----------
+HCL.combine_ <- NormalizeData(HCL.combine, normalization.method = "LogNormalize", scale.factor = 10000)
+HCL.combine_ <- FindVariableFeatures(HCL.combine_, selection.method = "vst", nfeatures = 5000)
+all.genes <- rownames(HCL.combine_)
+HCL.combine_ <- ScaleData(HCL.combine_, features = all.genes)
+HCL.combine_ <- RunPCA(object = HCL.combine_)
+HCL.combine_ <- FindNeighbors(object = HCL.combine_, dims = 1:50)
+HCL.combine_ <- FindClusters(object = HCL.combine_)
+HCL.combine_ <- RunUMAP(object = HCL.combine_, dims = 1:50)
+HCL.combine_ <- RunTSNE(object = HCL.combine_, dims = 1:50)
+
+# plot dimensional reduction data for all----------
+DimPlot(object = HCL.total_, reduction = "umap",group.by ='')#orig.ident
+DimPlot(object = HCL.total_, reduction = "tsne",group.by ='orig.ident')
+
+p <- DimPlot(object = HCL.total_, reduction = "pca",group.by ='orig.ident',pt.size=0.1)+
+  theme(legend.position = c(0.8, 0.1),
+        legend.key.size = unit(0.1, "cm"),
+        legend.key.width = unit(0.1, "cm"),
+        legend.text = element_text(size=6),
+        axis.text.y = element_text(size=6),
+        axis.text.x = element_text(size = 6),
+        axis.title = element_text(colour='black', size=7),
+        legend.title=element_blank(),
+        legend.key=element_blank(),
+        axis.line.x = element_line(colour = "black", size=0.25),
+        axis.line.y = element_line(colour = "black", size=0.25),
+        axis.ticks.x = element_line(colour = "black", size = 0.25),
+        axis.ticks.y = element_line(colour = "black", size = 0.25))+
+  guides(color = guide_legend(override.aes = list(size = 0.3)))+
+  scale_color_manual(values =alpha(c("#66C2A5","#FC8D62","#8DA0CB","#E78AC3","#A6D854"), 0.5),
+                     labels =c('Sti_0h','Sti_2h','Sti_4h','Sti_6h','Sti_8h'))+
+  labs(title = NULL)
+ggsave(filename = "total_PCA.pdf",plot = p,width=45*2,height = 45*2,units = "mm", dpi = 300)
+
+
+# plot dimensional reduction data for new ----------
+#DimPlot(object = HCL.new_, reduction = "umap",group.by ='orig.ident')
+#DimPlot(object = HCL.new_, reduction = "tsne",group.by ='orig.ident')
+#DimPlot(object = HCL.new_, reduction = "pca",group.by ='orig.ident')
+
+p <- DimPlot(object = HCL.new_, reduction = "pca",group.by ='orig.ident',pt.size=0.1)+
+  theme(legend.position = c(0.8, 0.1),
+        legend.key.size = unit(0.1, "cm"),
+        legend.key.width = unit(0.1, "cm"),
+        legend.text = element_text(size=6),
+        axis.text.y = element_text(size=6),
+        axis.text.x = element_text(size = 6),
+        axis.title = element_text(colour='black', size=7),
+        legend.title=element_blank(),
+        legend.key=element_blank(),
+        axis.line.x = element_line(colour = "black", size=0.25),
+        axis.line.y = element_line(colour = "black", size=0.25),
+        axis.ticks.x = element_line(colour = "black", size = 0.25),
+        axis.ticks.y = element_line(colour = "black", size = 0.25))+
+  guides(color = guide_legend(override.aes = list(size = 0.3)))+
+  scale_color_manual(values =alpha(c("#66C2A5","#FC8D62","#8DA0CB","#E78AC3","#A6D854"), 0.5),
+                     labels =c('Sti_0h','Sti_2h','Sti_4h','Sti_6h','Sti_8h'))+
+  labs(title = NULL)
+
+ggsave(filename = "new_PCA.pdf",plot = p,width=45*2,height = 45*2,units = "mm", dpi = 300)
+
+
+
+# plot dimensional reduction data for combine ----------
+# DimPlot(object = HCL.combine_, reduction = "umap",group.by ='orig.ident')
+# DimPlot(object = HCL.combine_, reduction = "tsne",group.by ='orig.ident')
+
+
+p <- DimPlot(object = HCL.combine_, reduction = "pca",group.by ='orig.ident',pt.size=0.1)+
+  theme(legend.position = c(0.8, 0.1),
+        legend.key.size = unit(0.1, "cm"),
+        legend.key.width = unit(0.1, "cm"),
+        legend.text = element_text(size=6),
+        axis.text.y = element_text(size=6),
+        axis.text.x = element_text(size = 6),
+        axis.title = element_text(colour='black', size=7),
+        legend.title=element_blank(),
+        legend.key=element_blank(),
+        axis.line.x = element_line(colour = "black", size=0.25),
+        axis.line.y = element_line(colour = "black", size=0.25),
+        axis.ticks.x = element_line(colour = "black", size = 0.25),
+        axis.ticks.y = element_line(colour = "black", size = 0.25))+
+  guides(color = guide_legend(override.aes = list(size = 0.3)))+
+  scale_color_manual(values =alpha(c("#66C2A5","#FC8D62","#8DA0CB","#E78AC3","#A6D854"), 0.5),
+                     labels =c('Sti_0h','Sti_2h','Sti_4h','Sti_6h','Sti_8h'))+
+  labs(title = NULL)
+
+ggsave(filename = "combined_PCA.pdf",plot = p,width=45*2,height = 45*2,units = "mm", dpi = 300)
+
+# plot time vs PC1 for combined -------------
+HCL.combine_[['pca']]
+PC1_all <- Embeddings(HCL.total_, reduction = "pca")[ ,1]
+orig.ident_all <- HCL.total_[['orig.ident']]
+orig.ident_all$orig.ident <- c(rep('sti_0h',1014),rep('sti_2h',809),rep('sti_4h',831),rep('sti_6h',1016),rep('sti_8h',359))
+orig.ident_all$PC1 <- PC1_all
+
+p <- ggplot(as.data.frame(orig.ident_all), aes(x = orig.ident, y = PC1, 
+                                             colour = orig.ident)) +
+  geom_quasirandom(groupOnX = FALSE,size=0.1) +
+  #scale_color_tableau() + 
+  theme_classic() +
+  theme(#legend.position = c(0.8, 0.1),
+        legend.key.size = unit(0.1, "cm"),
+        legend.key.width = unit(0.1, "cm"),
+        legend.text = element_text(size=6),
+        axis.text.y = element_text(size=6),
+        axis.text.x = element_text(size = 6),
+        axis.title = element_text(colour='black', size=7),
+        legend.title=element_blank(),
+        legend.key=element_blank(),
+        axis.line.x = element_line(colour = "black", size=0.25),
+        axis.line.y = element_line(colour = "black", size=0.25),
+        axis.ticks.x = element_line(colour = "black", size = 0.25),
+        axis.ticks.y = element_line(colour = "black", size = 0.25))+
+  ylab("PC1") + xlab("Time")+
+  scale_color_manual(values =alpha(c("#66C2A5","#FC8D62","#8DA0CB","#E78AC3","#A6D854"), 0.5),
+                     labels =c('Sti_0h','Sti_2h','Sti_4h','Sti_6h','Sti_8h'))
+
+ggsave(filename = "PC1_time_course.pdf",plot = p,width=45*2,height = 45,units = "mm", dpi = 300)
+
+```
+
+```{r fig 3e}
+# DEGs ---------------------------------------------------------------
+
+# total_transcripts, DEGs, 2h
+control_vs_2hsti <- subset(x = HCL.total, subset = orig.ident == "control_total" | orig.ident =='mouse_2h_total')
+Idents(object = control_vs_2hsti)
+control_vs_2hsti <- NormalizeData(control_vs_2hsti, normalization.method = "LogNormalize", scale.factor = 10000)
+new.markers <- FindMarkers(control_vs_2hsti, ident.2 ='control_total',min.pct = 0.1, ident.1 ='mouse_2h_total', test.use="wilcox", logfc.threshold = 0)
+
+# total_transcripts, DEGs, 4h
+control_vs_4hsti <- subset(x = HCL.total, subset = orig.ident == "control_total" | orig.ident =='mouse_4h_total')
+Idents(object = control_vs_4hsti)
+control_vs_4hsti <- NormalizeData(control_vs_4hsti, normalization.method = "LogNormalize", scale.factor = 10000)
+new.markers.4h <- FindMarkers(control_vs_4hsti, ident.2 ='control_total',min.pct = 0.1, ident.1 ='mouse_4h_total', test.use="wilcox", logfc.threshold = 0)
+
+
+# total_transcripts, DEGs, 6h
+control_vs_6hsti <- subset(x = HCL.total, subset = orig.ident == "control_total" | orig.ident =='mouse_6h_total')
+Idents(object = control_vs_6hsti)
+control_vs_6hsti <- NormalizeData(control_vs_6hsti, normalization.method = "LogNormalize", scale.factor = 10000)
+new.markers.6h <- FindMarkers(control_vs_6hsti, ident.2 ='control_total',min.pct = 0.1, ident.1 ='mouse_6h_total', test.use="wilcox", logfc.threshold = 0)
+
+# total_transcripts, DEGs, 8h
+control_vs_8hsti <- subset(x = HCL.total, subset = orig.ident == "control_total" | orig.ident =='mouse_8h_total')
+Idents(object = control_vs_8hsti)
+control_vs_8hsti <- NormalizeData(control_vs_8hsti, normalization.method = "LogNormalize", scale.factor = 10000)
+new.markers.8h <- FindMarkers(control_vs_8hsti, ident.2 ='control_total',min.pct = 0.1, ident.1 ='mouse_8h_total', test.use="wilcox", logfc.threshold = 0)
+
+#volcano plot -------------------------------------------------------
+
+# control vs 2h --------
+new.markers_ <- new.markers%>%mutate(gene_type =case_when(avg_log2FC >= log2(1.5) & p_val_adj <= 0.05~"up",
+                                                          avg_log2FC <= log2(2/3) & p_val_adj <= 0.05~"down",
+                                                                         TRUE~"ns"))
+table(new.markers_$gene_type)
+
+# get TF list, # get the list of transcriptional factor from https://resources.aertslab.org/cistarget/tf_lists/ OR
+# get TF list, # get the list of transcriptional factor from https://cgs.csail.mit.edu/ReprogrammingRecovery/mouse_tf_list.html
+ mmTF <-read.delim(file = 'mouseTFs.txt',header = F)
+ 
+ DEG_TF <- new.markers_%>%filter(rownames(new.markers_) %in% mmTF$V1)
+ DEG_TF <- DEG_TF%>%filter(gene_type != 'ns')
+ 
+ table(DEG_TF$gene_type)
+
+ write.csv(DEG_TF,file = '2h_vs_control.csv')
+
+cols <- c("up" = "#ffad73", "down" = "#26b3ff", "ns" = "grey") 
+p <- ggplot(data=new.markers_,aes(x = avg_log2FC,
+                          y = -log10(p_val_adj),
+                          color = gene_type)) + 
+  geom_point(size=0.1)+
+  geom_point(data =DEG_TF,
+             shape =21,
+             size =0.5, 
+             fill ="firebrick", 
+             colour ="firebrick")+
+  geom_label_repel(data =DEG_TF, # Add labels last to appear as the top layer  
+                   aes(label =rownames(DEG_TF)),
+                   max.overlaps=40,size = 5/.pt)+
+  geom_vline(xintercept = c(log2(2/3), log2(3/2)),
+             linetype = "dashed",size=0.25) +
+  geom_hline(yintercept =-log10(0.05),linetype = "dashed",size=0.25)+
+  scale_colour_manual(values = cols)+ # Modify point colour
+  #xlim(-3, 3)+
+  theme_classic() +
+  theme(
+    axis.text.y = element_text(size=6),
+    axis.text.x = element_text(size = 6),
+    axis.title = element_text(colour='black', size=7),
+    legend.title=element_blank(),
+    legend.key=element_blank(),
+    legend.position = c(0.9, 0.9),
+    legend.key.size = unit(0.1, "cm"),
+    legend.key.width = unit(0.1, "cm"),
+    legend.text = element_text(size=6),
+    axis.line.x = element_line(colour = "black", size=0.25),
+    axis.line.y = element_line(colour = "black", size=0.25),
+    axis.ticks.x = element_line(colour = "black", size = 0.25),
+    axis.ticks.y = element_line(colour = "black", size = 0.25)
+   )+
+  labs(color = " ")+
+  guides(colour = guide_legend(override.aes = list(size=1)))+
+  annotate("text", x = -2, y = 100,
+           label = "n=87g,13TF", color = "firebrick",size=2)+
+  guides(colour = guide_legend(override.aes = list(size=1)))+
+  annotate("text", x = 2, y = 100,
+           label = "n=118,12TF", color = "firebrick",size=2)
+ggsave(filename = "DEG_2h.pdf",plot = p,width=45*2,height = 45*2,units = "mm", dpi = 300)
+
+
+# control vs 4h ---------
+new.markers.4h_ <- new.markers.4h%>%mutate(gene_type =case_when(avg_log2FC >= log2(1.5) & p_val_adj <= 0.05~"up",
+                                                          avg_log2FC <= log2(2/3) & p_val_adj <= 0.05~"down",
+                                                          TRUE~"ns"))
+table(new.markers.4h_$gene_type)
+
+DEG_TF_4h <- new.markers.4h_%>%filter(rownames(new.markers.4h_) %in% mmTF$V1)
+DEG_TF_4h <- DEG_TF_4h%>%filter(gene_type != 'ns')
+
+write.csv(DEG_TF_4h,file = '4h_vs_control.csv')
+
+table(DEG_TF_4h$gene_type)
+
+cols <- c("up" = "#ffad73", "down" = "#26b3ff", "ns" = "grey") 
+p <- ggplot(data=new.markers.4h_,aes(x = avg_log2FC,
+                                  y = -log10(p_val_adj),
+                                  color = gene_type)) + 
+  geom_point(size=0.1)+
+  geom_point(data =DEG_TF_4h,
+             shape =21,
+             size =0.5, 
+             fill ="firebrick", 
+             colour ="firebrick")+
+  geom_label_repel(data =DEG_TF_4h, # Add labels last to appear as the top layer  
+                   aes(label =rownames(DEG_TF_4h)),
+                   max.overlaps=40,size = 5/.pt)+
+  geom_vline(xintercept = c(log2(2/3), log2(3/2)),
+             linetype = "dashed",size=0.25) +
+  geom_hline(yintercept =-log10(0.05),linetype = "dashed",size=0.25)+
+  scale_colour_manual(values = cols)+ # Modify point colour
+  #xlim(-3, 3)+
+  theme_classic() +
+  theme(
+    axis.text.y = element_text(size=6),
+    axis.text.x = element_text(size = 6),
+    axis.title = element_text(colour='black', size=7),
+    legend.title=element_blank(),
+    legend.key=element_blank(),
+    legend.position = c(0.9, 0.9),
+    legend.key.size = unit(0.1, "cm"),
+    legend.key.width = unit(0.1, "cm"),
+    legend.text = element_text(size=6),
+    axis.line.x = element_line(colour = "black", size=0.25),
+    axis.line.y = element_line(colour = "black", size=0.25),
+    axis.ticks.x = element_line(colour = "black", size = 0.25),
+    axis.ticks.y = element_line(colour = "black", size = 0.25)
+  )+
+  labs(color = " ")+
+  guides(colour = guide_legend(override.aes = list(size=1)))+
+  annotate("text", x = -2, y = 150,
+           label = "n=131g,15TF", color = "firebrick",size=2)+
+  guides(colour = guide_legend(override.aes = list(size=1)))+
+  annotate("text", x = 2, y = 150,
+           label = "n=306g,12TF", color = "firebrick",size=2)
+ggsave(filename = "DEG_4h.pdf",plot = p,width=45*2,height = 45*2,units = "mm", dpi = 300)
+
+# control vs 6h ---------
+new.markers.6h_ <- new.markers.6h%>%mutate(gene_type =case_when(avg_log2FC >= log2(1.5) & p_val_adj <= 0.05~"up",
+                                                                avg_log2FC <= log2(2/3) & p_val_adj <= 0.05~"down",
+                                                                TRUE~"ns"))
+table(new.markers.6h_$gene_type)
+
+DEG_TF_6h <- new.markers.6h_%>%filter(rownames(new.markers.6h_) %in% mmTF$V1)
+DEG_TF_6h <- DEG_TF_6h%>%filter(gene_type != 'ns')
+
+write.csv(DEG_TF_6h,file = '6h_vs_control.csv')
+
+table(DEG_TF_6h$gene_type)
+
+cols <- c("up" = "#ffad73", "down" = "#26b3ff", "ns" = "grey") 
+p <- ggplot(data=new.markers.6h_,aes(x = avg_log2FC,
+                                     y = -log10(p_val_adj),
+                                     color = gene_type)) + 
+  geom_point(size=0.1)+
+  geom_point(data =DEG_TF_6h,
+             shape =21,
+             size =0.5, 
+             fill ="firebrick", 
+             colour ="firebrick")+
+  geom_label_repel(data =DEG_TF_6h, # Add labels last to appear as the top layer  
+                   aes(label =rownames(DEG_TF_6h)),
+                   max.overlaps=40,size = 5/.pt)+
+  geom_vline(xintercept = c(log2(2/3), log2(3/2)),
+             linetype = "dashed",size=0.25) +
+  geom_hline(yintercept =-log10(0.05),linetype = "dashed",size=0.25)+
+  scale_colour_manual(values = cols)+ # Modify point colour
+  #xlim(-3, 3)+
+  theme_classic() +
+  theme(
+    axis.text.y = element_text(size=6),
+    axis.text.x = element_text(size = 6),
+    axis.title = element_text(colour='black', size=7),
+    legend.title=element_blank(),
+    legend.key=element_blank(),
+    legend.position = c(0.9, 0.9),
+    legend.key.size = unit(0.1, "cm"),
+    legend.key.width = unit(0.1, "cm"),
+    legend.text = element_text(size=6),
+    axis.line.x = element_line(colour = "black", size=0.25),
+    axis.line.y = element_line(colour = "black", size=0.25),
+    axis.ticks.x = element_line(colour = "black", size = 0.25),
+    axis.ticks.y = element_line(colour = "black", size = 0.25)
+  )+
+  labs(color = " ")+
+  guides(colour = guide_legend(override.aes = list(size=1)))+
+  annotate("text", x = -2, y = 150,
+           label = "n=142g,15TF", color = "firebrick",size=2)+
+  guides(colour = guide_legend(override.aes = list(size=1)))+
+  annotate("text", x = 2, y = 150,
+           label = "n=417g,9TF", color = "firebrick",size=2)
+ggsave(filename = "DEG_6h.pdf",plot = p,width=45*2,height = 45*2,units = "mm", dpi = 300)
+
+# control vs 8h ---------
+new.markers.8h_ <- new.markers.8h%>%mutate(gene_type =case_when(avg_log2FC >= log2(1.5) & p_val_adj <= 0.05~"up",
+                                                                avg_log2FC <= log2(2/3) & p_val_adj <= 0.05~"down",
+                                                                TRUE~"ns"))
+table(new.markers.8h_$gene_type)
+
+DEG_TF_8h <- new.markers.8h_%>%filter(rownames(new.markers.8h_) %in% mmTF$V1)
+DEG_TF_8h <- DEG_TF_8h%>%filter(gene_type != 'ns')
+
+write.csv(DEG_TF_8h,file = '8h_vs_control.csv')
+
+saveRDS(DEG_TF_8h,file = 'DEG_TF_8h.rds')
+table(DEG_TF_8h$gene_type)
+
+cols <- c("up" = "#ffad73", "down" = "#26b3ff", "ns" = "grey") 
+p <- ggplot(data=new.markers.8h_,aes(x = avg_log2FC,
+                                     y = -log10(p_val_adj),
+                                     color = gene_type)) + 
+  geom_point(size=0.1)+
+  geom_point(data =DEG_TF_8h,
+             shape =21,
+             size =0.5, 
+             fill ="firebrick", 
+             colour ="firebrick")+
+  geom_label_repel(data =DEG_TF_8h, # Add labels last to appear as the top layer  
+                   aes(label =rownames(DEG_TF_8h)),
+                   max.overlaps=80,size = 5/.pt)+
+  geom_vline(xintercept = c(log2(2/3), log2(3/2)),
+             linetype = "dashed",size=0.25) +
+  geom_hline(yintercept =-log10(0.05),linetype = "dashed",size=0.25)+
+  scale_colour_manual(values = cols)+ # Modify point colour
+  #xlim(-3, 3)+
+  theme_classic() +
+  theme(
+    axis.text.y = element_text(size=6),
+    axis.text.x = element_text(size = 6),
+    axis.title = element_text(colour='black', size=7),
+    legend.title=element_blank(),
+    legend.key=element_blank(),
+    legend.position = c(0.9, 0.9),
+    legend.key.size = unit(0.1, "cm"),
+    legend.key.width = unit(0.1, "cm"),
+    legend.text = element_text(size=6),
+    axis.line.x = element_line(colour = "black", size=0.25),
+    axis.line.y = element_line(colour = "black", size=0.25),
+    axis.ticks.x = element_line(colour = "black", size = 0.25),
+    axis.ticks.y = element_line(colour = "black", size = 0.25)
+  )+
+  labs(color = " ")+
+  guides(colour = guide_legend(override.aes = list(size=1)))+
+  annotate("text", x = -2, y = 150,
+           label = "n=130g,14TF", color = "firebrick",size=2)+
+  guides(colour = guide_legend(override.aes = list(size=1)))+
+  annotate("text", x = 2, y = 150,
+           label = "n=539g,11TF", color = "firebrick",size=2)
+ggsave(filename = "DEG_8h.pdf",plot = p,width=45*2,height = 45*2,units = "mm", dpi = 300)
+```
+
+```{r fig 3f}
+# all DEG TFs ---------------------------------------------------------------
+allDGETFs <- c(rownames(DEG_TF_8h),rownames(DEG_TF_6h),rownames(DEG_TF_4h),rownames(DEG_TF))
+allDGETFs <- unique(allDGETFs)
+
+# retrieve average expression level from normalized dataset --------------------------------
+expr <- readRDS('expressionlevel.rds')
+expr <- as.data.frame(expr)
+expr_TF <- expr[rownames(expr) %in% allDGETFs, ]
+expr_TF$ID <- rownames(expr_TF)
+expr_TF <- expr_TF[order(expr_TF$ID), ]
+expr_TF$ID <- NULL
+expr_TF_m <- as.matrix(expr_TF)
+
+# Manually scale and center the data
+mat <- expr_TF_m
+mat_scaled = t(apply(mat, 1, scale))
+colnames(mat_scaled) <- c('0h','2h','4h','6h','8h')
+col_fun = colorRamp2(c(-2,0,2), c("#1976D2",'#E0E0E0', "#F44336"))
+#group <- c(rep('Down',16), rep('Up',39))
+
+pdf("expr_DEGTF_all_self.pdf",width=1.77,height=1.77*2.5) # 1.77 in = 45 mm 
+
+p <- Heatmap(mat_scaled,
+             col = col_fun,
+             name = " ", #title of legend
+             #column_title = "cells", row_title = "regulon",
+             row_names_gp = gpar(fontsize = 5), # Text size for row names
+             cluster_rows = TRUE,
+             show_row_dend = FALSE,
+             cluster_columns = FALSE,
+             show_row_names = TRUE,
+             show_column_names = TRUE,
+             #column_title_rot = 0,
+             column_names_gp = gpar(fontsize = 5),
+             heatmap_legend_param = list(title_gp = gpar(fontsize = 5, fontface = "bold"),grid_height = unit(1, "mm"),grid_width = unit(1, "mm"),labels_gp = gpar(fontsize = 4))
+             #row_split = group,
+             #top_annotation = ha,
+             #width = unit(3, "cm"), height = unit(3, "cm")
+)
+draw(p)
+dev.off()
+
+
+# get the row order of the heatmap
+row_order <- row_order(p)
+row_order <-unlist(row_order)
+
+# retrieve average syn rate from normalized dataset ----------------------------------------
+synthsis <- readRDS('Synthesisrate.rds')
+synthsis <- as.data.frame(synthsis)
+syn_TF <- synthsis[rownames(synthsis) %in% allDGETFs, ]
+syn_TF$ID <- rownames(syn_TF)
+syn_TF <- syn_TF[order(syn_TF$ID), ]
+syn_TF$ID <- NULL
+syn_TF_m <- as.matrix(syn_TF)
+
+# Manually scale and center the data
+mat <- syn_TF_m
+mat_scaled = t(apply(mat, 1, scale))
+colnames(mat_scaled) <- c('0h','2h','4h','6h','8h')
+
+# reorder the maxtrix
+mat_scaled <- mat_scaled[row_order, ]
+
+pdf("syn_DEGTF_all_self.pdf",width=1.77,height=1.77*2.5) # 1.77 in = 45 mm 
+ht <- Heatmap(mat_scaled,
+              col = col_fun,
+              name = " ", #title of legend
+              #column_title = "cells", row_title = "regulon",
+              row_names_gp = gpar(fontsize = 5), # Text size for row names
+              cluster_rows = FALSE,
+              cluster_columns = FALSE,
+              show_row_names = TRUE,
+              show_column_names = TRUE,
+              #column_title_rot = 0,
+              column_names_gp = gpar(fontsize = 5),
+              heatmap_legend_param = list(title_gp = gpar(fontsize = 5, fontface = "bold"),grid_height = unit(1, "mm"),grid_width = unit(1, "mm"),labels_gp = gpar(fontsize = 4))
+              #row_split = group,
+              #top_annotation = ha,
+              #width = unit(3, "cm"), height = unit(3, "cm")
+)
+
+draw(ht)
+dev.off()
+
+```
+
+```{r matrix normalization for expression and newly sythesized RNA}
+
+# cotrol -----------------------------------------------------------------------------------------------
+# scale factor -- total reads
+S0 <- sum(control_total_rna)
+
+# normalize all matrixes 
+control_new_rna_M <- rowSums(control_new_rna)
+control_total_rna_M <- rowSums(control_total_rna)
+control_total_rna_N <- 100000*control_total_rna_M/S0
+Rsynthesis_0 <- 100000*control_new_rna_M/S0
+
+# mouse_2h --------------------------------------------------------------------------------------------
+# scale factor -- total reads
+S2 <- sum(mouse_2h_total_rna)
+
+# normalize all matrixes 
+mouse_2h_new_rna_M <- rowSums(mouse_2h_new_rna)
+mouse_2h_total_rna_M <- rowSums(mouse_2h_total_rna)
+mouse_2h_old_rna_M <- rowSums(mouse_2h_old_rna)
+mouse_2h_total_rna_N <- 100000*mouse_2h_total_rna_M/S2
+mouse_2h_old_rna_N <- 100000*mouse_2h_old_rna_M/S2
+Rsynthesis_2 <- 100000*mouse_2h_new_rna_M/S2
+
+# mouse_4h --------------------------------------------------------------------------------------------
+# scale factor -- total reads
+S4 <- sum(mouse_4h_total_rna)
+
+# normalize all matrixes 
+mouse_4h_new_rna_M <- rowSums(mouse_4h_new_rna)
+mouse_4h_total_rna_M <- rowSums(mouse_4h_total_rna)
+mouse_4h_old_rna_M <- rowSums(mouse_4h_old_rna)
+mouse_4h_total_rna_N <- 100000*mouse_4h_total_rna_M/S4
+mouse_4h_old_rna_N <- 100000*mouse_4h_old_rna_M/S4
+Rsynthesis_4 <- 100000*mouse_4h_new_rna_M/S4
+
+# mouse_6h --------------------------------------------------------------------------------------------
+# scale factor -- total reads
+S6 <- sum(mouse_6h_total_rna)
+
+# normalize all matrixes 
+mouse_6h_new_rna_M <- rowSums(mouse_6h_new_rna)
+mouse_6h_total_rna_M <- rowSums(mouse_6h_total_rna)
+mouse_6h_old_rna_M <- rowSums(mouse_6h_old_rna)
+mouse_6h_total_rna_N <- 100000*mouse_6h_total_rna_M/S6
+mouse_6h_old_rna_N <- 100000*mouse_6h_old_rna_M/S6
+Rsynthesis_6 <- 100000*mouse_6h_new_rna_M/S6
+
+# mouse_8h --------------------------------------------------------------------------------------------
+# scale factor -- total reads
+S8 <- sum(mouse_8h_total_rna)
+
+# normalize all matrixes 
+mouse_8h_new_rna_M <- rowSums(mouse_8h_new_rna)
+mouse_8h_total_rna_M <- rowSums(mouse_8h_total_rna)
+mouse_8h_old_rna_M <- rowSums(mouse_8h_old_rna)
+mouse_8h_total_rna_N <- 100000*mouse_8h_total_rna_M/S8
+mouse_8h_old_rna_N <- 100000*mouse_8h_old_rna_M/S8
+Rsynthesis_8 <- 100000*mouse_8h_new_rna_M/S8
+
+# newly synthesized level -----------------------------
+allgene <- unique(c(names(Rsynthesis_8),names(Rsynthesis_6),names(Rsynthesis_4),names(Rsynthesis_2),names(Rsynthesis_0)))
+syn_all <- vector(mode = "numeric",length = length(allgene))
+names(syn_all) <- allgene
+
+tm.m <- syn_all[-which(names(syn_all) %in% names(Rsynthesis_0))]
+R0_complete <- c(Rsynthesis_0,tm.m)
+
+tm.m <- syn_all[-which(names(syn_all) %in% names(Rsynthesis_2))]
+R2_complete <- c(Rsynthesis_2,tm.m)
+
+tm.m <- syn_all[-which(names(syn_all) %in% names(Rsynthesis_4))]
+R4_complete <- c(Rsynthesis_4,tm.m)
+
+tm.m <- syn_all[-which(names(syn_all) %in% names(Rsynthesis_6))]
+R6_complete <- c(Rsynthesis_6,tm.m)
+
+tm.m <- syn_all[-which(names(syn_all) %in% names(Rsynthesis_8))]
+R8_complete <- c(Rsynthesis_8,tm.m)
+
+Synthesisrate <- cbind(R0_complete,R2_complete,R4_complete,R6_complete,R8_complete)
+
+Synthesisrate <- Synthesisrate[rowSums(Synthesisrate > 0) >= 1, ]
+
+saveRDS(Synthesisrate,file = 'Synthesisrate.rds')
+
+# expression level ----------------------------
+allgene <- unique(c(names(control_total_rna_N),names(mouse_2h_total_rna_N),names(mouse_4h_total_rna_N),names(mouse_6h_total_rna_N),names(mouse_8h_total_rna_N)))
+expr_all <- vector(mode = "numeric",length = length(allgene))
+names(expr_all) <- allgene
+
+tm.m <- expr_all[-which(names(expr_all) %in% names(control_total_rna_N))]
+E0_complete <- c(control_total_rna_N,tm.m)
+
+tm.m <- expr_all[-which(names(expr_all) %in% names(mouse_2h_total_rna_N))]
+E2_complete <- c(mouse_2h_total_rna_N,tm.m)
+
+tm.m <- expr_all[-which(names(expr_all) %in% names(mouse_4h_total_rna_N))]
+E4_complete <- c(mouse_4h_total_rna_N,tm.m)
+
+tm.m <- expr_all[-which(names(expr_all) %in% names(mouse_6h_total_rna_N))]
+E6_complete <- c(mouse_6h_total_rna_N,tm.m)
+
+tm.m <- expr_all[-which(names(expr_all) %in% names(mouse_8h_total_rna_N))]
+E8_complete <- c(mouse_8h_total_rna_N,tm.m)
+
+expressionlevel <- cbind(E0_complete,E2_complete,E4_complete,E6_complete,E8_complete)
+
+expressionlevel <- expressionlevel[rowSums(expressionlevel > 0) >= 1, ]
+
+saveRDS(expressionlevel,file='expressionlevel.rds')
+
+```
+

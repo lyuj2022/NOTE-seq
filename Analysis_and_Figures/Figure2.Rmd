@@ -1,0 +1,494 @@
+---
+title: "Figure2"
+author: "Lyu"
+date: "2024-06-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(Seurat)
+#library(patchwork)
+library(ggplot2)
+library(RColorBrewer)
+#library(cowplot)
+library(pheatmap)
+library(sva)
+library(ggrepel)
+```
+
+```{r 2b,2f}
+# sti -------
+sti_new_rna <- readRDS('sti_new_rna.rds')
+sti_old_rna <- readRDS('sti_old_rna.rds')
+
+sti_total_rna <- sti_new_rna+sti_old_rna
+
+sti_total <- CreateSeuratObject(counts=sti_total_rna, project='sti_total', min.cells = 3)
+sti_total[["percent.mt"]] <- PercentageFeatureSet(sti_total, pattern = "^MT-")
+sti_total_filter <- subset(sti_total, subset = nFeature_RNA > 200 & nCount_RNA > 10000 & nCount_RNA < 100000 & percent.mt < 5) 
+sti_total_filter_counts <- as.data.frame(GetAssayData(object = sti_total_filter, slot = "counts")) 
+
+# lab ----
+lab_new_rna <- readRDS('lab_new_rna.rds')
+lab_old_rna <- readRDS('lab_old_rna.rds')
+
+lab_total_rna <- lab_new_rna+lab_old_rna
+
+lab_total <- CreateSeuratObject(counts=lab_total_rna, project='unsti_total', min.cells = 3)
+lab_total[["percent.mt"]] <- PercentageFeatureSet(lab_total, pattern = "^MT-")
+lab_total_filter <- subset(lab_total, subset = nFeature_RNA > 200 & nCount_RNA > 10000 & nCount_RNA < 100000 & percent.mt < 5) 
+lab_total_filter_counts <- as.data.frame(GetAssayData(object = lab_total_filter, slot = "counts")) 
+
+# remove batch effect
+sti_total_filter_counts$ID <- rownames(sti_total_filter_counts)
+lab_total_filter_counts$ID <- rownames(lab_total_filter_counts)
+
+mat <- full_join(lab_total_filter_counts,sti_total_filter_counts,by='ID')
+rownames(mat) <- mat$ID
+mat$ID <- NULL
+mat[is.na(mat)] <- 0
+
+count_matrix <- as.matrix(mat) 
+
+batch <- c(rep(1, 233), rep(2, 748))
+
+adjusted <- ComBat_seq(count_matrix, batch=batch, group=NULL)
+
+head(adjusted)
+
+lab_total_rna <-as.matrix(adjusted[ ,1:233]) 
+sti_total_rna <-as.matrix(adjusted[ ,234:981]) 
+
+lab_total <- CreateSeuratObject(counts=lab_total_rna, project='unsti_total', min.cells = 3)
+sti_total <- CreateSeuratObject(counts=sti_total_rna, project='sti_total', min.cells = 3)
+
+group_id <- c('sti_total','unsti_total')
+HCL.total <- merge(x=sti_total, y=lab_total, add.cell.ids = group_id, project = "total")
+
+total_norm <- NormalizeData(HCL.total, normalization.method = "LogNormalize", scale.factor = 10000)
+total_norm <- FindVariableFeatures(total_norm, selection.method = "vst", nfeatures = 10000)
+all.genes <- rownames(total_norm)
+total_norm <- ScaleData(total_norm, features = all.genes)
+total_norm <- RunPCA(total_norm, features = VariableFeatures(object = total_norm))
+
+table(total_norm@meta.data$orig.ident)
+
+p <- DimPlot(object = total_norm, reduction = "pca",pt.size=0.1,cols=alpha(my_cols,0.7))+
+  theme(legend.position = c(0.1, 0.9),
+        legend.key.size = unit(0.1, "cm"),
+        legend.key.width = unit(0.1, "cm"),
+        legend.text = element_text(size=6),
+        axis.text.y = element_text(size=6),
+        axis.text.x = element_text(size = 6),
+        axis.title = element_text(colour='black', size=7),
+        legend.title=element_blank(),
+        legend.key=element_blank(),
+        axis.line.x = element_line(colour = "black", size=0.25),
+        axis.line.y = element_line(colour = "black", size=0.25),
+        axis.ticks.x = element_line(colour = "black", size = 0.25),
+        axis.ticks.y = element_line(colour = "black", size = 0.25))+
+  guides(color = guide_legend(override.aes = list(size = 0.3)))
+ggsave(filename = "batch_corrected_total_PCA.pdf",plot = p,width=45,height = 45,units = "mm", dpi = 300)
+
+# DGE
+sti.total.markers <- FindMarkers(total_norm, ident.2 ='unsti_total',min.pct = 0.1, ident.1 ='sti_total', test.use="wilcox",logfc.threshold = 0)
+
+# save merged count matrix above for GRN analysis 
+HCL.total_counts <-as.data.frame(GetAssayData(object = HCL.total, slot = "counts"))
+saveRDS(HCL.total_counts,file = 'merged.total_counts.rds')
+
+## extract cell barcode from total for new,old 
+sti_cell_barcode_filter <- colnames(sti_total) %>% gsub("^sti_total_","",.)
+unsti_cell_barcode_filter <- colnames(lab_total) %>% gsub("^unsti_total_","",.)
+
+# old RNA ----------------
+#lab_old_rna <- read.csv('./Djurkat_lab_pre_old.csv',row.names = 1)
+#sti_old_rna <- read.csv('./Djurkat_sti_pre_old.csv',row.names = 1)
+
+lab_old_rna <- lab_old_rna[ ,colnames(lab_old_rna) %in% unsti_cell_barcode_filter]
+sti_old_rna <- sti_old_rna[ ,colnames(sti_old_rna) %in% sti_cell_barcode_filter]
+
+lab_old_rna$ID <- rownames(lab_old_rna)
+sti_old_rna$ID <- rownames(sti_old_rna)
+
+ncol(lab_old_rna)
+
+mat <- full_join(lab_old_rna,sti_old_rna,by='ID')
+rownames(mat) <- mat$ID
+mat$ID <- NULL
+mat[is.na(mat)] <- 0
+
+# remove batch effect
+
+count_matrix <- as.matrix(mat) 
+
+batch <- c(rep(1, 233), rep(2, 748))
+
+adjusted <- ComBat_seq(count_matrix, batch=batch, group=NULL)
+
+head(adjusted)
+
+lab_old_rna <-as.matrix(adjusted[ ,1:233]) 
+sti_old_rna <-as.matrix(adjusted[ ,234:981]) 
+
+lab_old <- CreateSeuratObject(counts=lab_old_rna, project='unsti_pre-existing', min.cells = 3)
+sti_old <- CreateSeuratObject(counts=sti_old_rna, project='sti_pre-existing', min.cells = 3)
+
+group_id <- c('sti_old','unsti_old')
+HCL.old <- merge(x=sti_old, y=lab_old, add.cell.ids = group_id, project = "old")
+
+old_norm <- NormalizeData(HCL.old, normalization.method = "LogNormalize", scale.factor = 10000)
+old_norm <- FindVariableFeatures(old_norm, selection.method = "vst", nfeatures = 10000)
+all.genes <- rownames(old_norm)
+old_norm <- ScaleData(old_norm, features = all.genes)
+old_norm <- RunPCA(old_norm, features = VariableFeatures(object = old_norm))
+
+
+p <- DimPlot(object = old_norm, reduction = "pca",pt.size=0.1,cols=alpha(my_cols,0.7))+
+  theme(legend.position = c(0.1, 0.9),
+        legend.key.size = unit(0.1, "cm"),
+        legend.key.width = unit(0.1, "cm"),
+        legend.text = element_text(size=6),
+        axis.text.y = element_text(size=6),
+        axis.text.x = element_text(size = 6),
+        axis.title = element_text(colour='black', size=7),
+        legend.title=element_blank(),
+        legend.key=element_blank(),
+        axis.line.x = element_line(colour = "black", size=0.25),
+        axis.line.y = element_line(colour = "black", size=0.25),
+        axis.ticks.x = element_line(colour = "black", size = 0.25),
+        axis.ticks.y = element_line(colour = "black", size = 0.25))+
+  guides(color = guide_legend(override.aes = list(size = 0.3)))
+ggsave(filename = "batch_corrected_old_PCA.pdf",plot = p,width=45,height = 45,units = "mm", dpi = 300)
+
+# new RNA ----------------------------------
+
+#lab_new_rna <- read.csv('./Djurkat_lab_pre_new.csv',row.names = 1)
+#sti_new_rna <- read.csv('./Djurkat_sti_pre_new.csv',row.names = 1)
+
+lab_new_rna <- lab_new_rna[ ,colnames(lab_new_rna) %in% unsti_cell_barcode_filter]
+sti_new_rna <- sti_new_rna[ ,colnames(sti_new_rna) %in% sti_cell_barcode_filter]
+
+lab_new_rna$ID <- rownames(lab_new_rna)
+sti_new_rna$ID <- rownames(sti_new_rna)
+
+ncol(lab_new_rna)
+
+mat <- full_join(lab_new_rna,sti_new_rna,by='ID')
+rownames(mat) <- mat$ID
+mat$ID <- NULL
+mat[is.na(mat)] <- 0
+
+# remove batch effect
+
+count_matrix <- as.matrix(mat) 
+
+batch <- c(rep(1, 233), rep(2, 748))
+
+adjusted <- ComBat_seq(count_matrix, batch=batch, group=NULL)
+
+head(adjusted)
+
+lab_new_rna <-as.matrix(adjusted[ ,1:233]) 
+sti_new_rna <-as.matrix(adjusted[ ,234:981]) 
+
+lab_new <- CreateSeuratObject(counts=lab_new_rna, project='unsti_new', min.cells = 3)
+sti_new <- CreateSeuratObject(counts=sti_new_rna, project='sti_new', min.cells = 3)
+
+group_id <- c('sti_new','unsti_new')
+HCL.new <- merge(x=sti_new, y=lab_new, add.cell.ids = group_id, project = "new")
+
+# get merged count matrix for GRN analysis ------
+HCL.new_counts <-as.data.frame(GetAssayData(object = HCL.new, slot = "counts"))
+saveRDS(HCL.new_counts,file = 'merged.new_counts.rds')
+
+
+new_norm <- NormalizeData(HCL.new, normalization.method = "LogNormalize", scale.factor = 10000)
+new_norm <- FindVariableFeatures(new_norm, selection.method = "vst", nfeatures = 10000)
+all.genes <- rownames(new_norm)
+new_norm <- ScaleData(new_norm, features = all.genes)
+new_norm <- RunPCA(new_norm, features = VariableFeatures(object = new_norm))
+
+p <- DimPlot(object = new_norm, reduction = "pca",pt.size=0.1,cols=alpha(my_cols,0.7))+
+  theme(legend.position = c(0.65, 0.9),
+        legend.key.size = unit(0.1, "cm"),
+        legend.key.width = unit(0.1, "cm"),
+        legend.text = element_text(size=6),
+        axis.text.y = element_text(size=6),
+        axis.text.x = element_text(size = 6),
+        axis.title = element_text(colour='black', size=7),
+        legend.title=element_blank(),
+        legend.key=element_blank(),
+        axis.line.x = element_line(colour = "black", size=0.25),
+        axis.line.y = element_line(colour = "black", size=0.25),
+        axis.ticks.x = element_line(colour = "black", size = 0.25),
+        axis.ticks.y = element_line(colour = "black", size = 0.25))+
+  guides(color = guide_legend(override.aes = list(size = 0.3)))
+ggsave(filename = "batch_corrected_new_PCA.pdf",plot = p,width=45,height = 45,units = "mm", dpi = 300)
+
+# DEGs
+new.total.markers <- FindMarkers(new_norm, ident.2 ='unsti_new',min.pct = 0.1, ident.1 ='sti_new', test.use="wilcox", logfc.threshold = 0)
+
+# compare DEG between total and nascent -----------------
+
+sti.total.markers_filter <- sti.total.markers%>%filter(avg_log2FC >= log2(1.25)&p_val_adj<=0.05 | avg_log2FC<=log2(1/1.25)&p_val_adj<=0.05)
+new.total.markers_filter <- new.total.markers%>%filter(avg_log2FC >= log2(1.25)&p_val_adj<=0.05 | avg_log2FC<=log2(1/1.25)&p_val_adj<=0.05)
+
+                                                              
+temp <- sti.total.markers[rownames(sti.total.markers) %in% rownames(new.total.markers_filter), ]
+
+new.total.markers_filter <- new.total.markers_filter[ ,c(2,5)]
+new.total.markers_filter$ID <- rownames(new.total.markers_filter)
+temp <- temp[ ,c(2,5)]
+temp$ID <- rownames(temp)
+
+DEG_merg <- full_join(new.total.markers_filter,temp, by='ID')
+
+DEG_merg_up <- DEG_merg %>% filter(avg_log2FC.x > log2(1.5))
+DEG_merg_down <- DEG_merg %>% filter(avg_log2FC.x < log2(1/1.5))
+
+DEG_merg_up <- DEG_merg_up %>% mutate(color=case_when(
+  avg_log2FC.y > log2(1.5) ~ 'DEGs detected by new and total transcripts',
+  TRUE~'DEGs detected by new transcripts'
+))
+
+write.csv(DEG_merg_up,file = 'DEG_merg_up.csv')
+
+DEG_merg_down <- DEG_merg_down %>% mutate(color=case_when(
+  avg_log2FC.y < log2(1/1.5) ~ 'DEGs detected by new and total transcripts',
+  TRUE~'DEGs detected by new transcripts'
+))
+
+write.csv(DEG_merg_down,file = 'DEG_merg_down.csv')
+
+meg_up_down <- rbind(DEG_merg_up,DEG_merg_down)
+write.csv(meg_up_down,file = 'DEG_merg_down_up.csv')
+
+# volcano plot for DEGs
+
+hmTF <-read.delim(file = 'humanTFs.txt',header = F)
+
+DEG_TF <- meg_up_down%>%filter(meg_up_down$ID %in% hmTF$V1)
+
+
+p <- meg_up_down%>% ggplot(aes(x=avg_log2FC.x, y= avg_log2FC.y, color=color))+
+  geom_label_repel(data = DEG_TF, # Add labels last to appear as the top layer  
+                   aes(label = ID,segment.size=0.25), min.segment.length = 0,
+                   max.overlaps=100,size = 6/.pt)+
+  theme_classic() +
+  geom_point(size=0.2)+
+  geom_abline(slope=1, intercept = 0, linewidth=0.5,color='red')+
+  geom_hline(yintercept=log2(1.5), linetype="dashed", color = "grey",linewidth=.25)+
+  geom_hline(yintercept=log2(1/1.5), linetype="dashed", color = "grey",linewidth=.25)+
+  geom_vline(xintercept=log2(1.5), linetype="dashed", color = "grey",linewidth=.25)+
+  geom_vline(xintercept=log2(1/1.5), linetype="dashed", color = "grey",linewidth=.25)+
+  scale_color_manual(values=c("#2980B9","#CB4335"))+
+  theme(legend.position = c(0.4, 0.85),
+        legend.key.size = unit(0.1, "cm"),
+        legend.key.width = unit(0.1, "cm"),
+        legend.text = element_text(size=6),
+        axis.text.y = element_text(size=6),
+        axis.text.x = element_text(size = 6),
+        axis.title = element_text(colour='black', size=7),
+        legend.title=element_blank(),
+        legend.key=element_blank(),
+        axis.line.x = element_line(colour = "black", size=0.25),
+        axis.line.y = element_line(colour = "black", size=0.25),
+        axis.ticks.x = element_line(colour = "black", size = 0.25),
+        axis.ticks.y = element_line(colour = "black", size = 0.25))+
+  #geom_text_repel(max.overlaps=40,size = 6/.pt)+
+  xlim(-1, 3.2)+
+  ylim(-1, 3.2)+
+  #change x and y labels
+  xlab("log2(foldchange)_New")+  
+  ylab("log2(foldchange)_Total")
+
+ggsave(filename = "DEG_down_up_TF.pdf",plot = p,width=45*2.5,height = 45*2.5,units = "mm", dpi = 300)
+
+```
+
+```{r 2d}
+# install SCENIC for gene regulatory networks analysis-----
+
+## Required:
+BiocManager::install(c("AUCell", "RcisTarget"))
+BiocManager::install(c("GENIE3")) # Optional. Can be replaced by GRNBoost
+
+## Optional (but highly recommended):
+## To score the network on cells (i.e. run AUCell):
+BiocManager::install(c("zoo", "mixtools", "rbokeh"))
+
+## To support paralell execution (not available in Windows):
+BiocManager::install(c("doMC", "doRNG"))
+
+if (!requireNamespace("devtools", quietly = TRUE)) install.packages("devtools")
+devtools::install_github("aertslab/SCENIC") 
+packageVersion("SCENIC")
+###########################################################
+library(SCENIC)
+##########################################################
+# load input from seurat QC, with batch effect corrected ------
+exprMat_t <- readRDS('merged.total_counts.rds')
+
+# specify cell types -------
+cellInfo <- data.frame(cell=c(colnames(exprMat_t)[1:748],colnames(exprMat_t)[749:981]),type=c(rep('sti',748),rep('unsti',233)))
+rownames(cellInfo) <- cellInfo$cell
+cellInfo$cell <- NULL
+
+# initiate SCENIC setting ---------
+org <- "hgnc" # or mgi, or dmel
+dbDir <- "cisTarget_databases" # RcisTarget databases location
+myDatasetTitle <- "SCENIC_T cell activation" # choose a name for your analysis
+#data(defaultDbNames)
+#dbs <- defaultDbNames[[org]]
+dbs <- c('500bp'="hg38__refseq-r80__500bp_up_and_100bp_down_tss.mc9nr.feather",'10kb'='hg38__refseq-r80__10kb_up_and_down_tss.mc9nr.feather')
+scenicOptions <- initializeScenic(org=org, dbDir=dbDir, dbs=dbs, datasetTitle=myDatasetTitle, nCores=10) 
+
+##### if initializeScenic() not working, run the follow two lines, then re-run initializeScenic() ########
+data(list="motifAnnotations_hgnc_v9", package="RcisTarget")
+motifAnnotations_hgnc <- motifAnnotations_hgnc_v9
+scenicOptions <- initializeScenic(org=org, dbDir=dbDir, dbs=dbs, datasetTitle=myDatasetTitle, nCores=10) 
+#########################################################################################################
+
+scenicOptions@inputDatasetInfo$cellInfo <- cellInfo
+
+# Save to use at a later time...
+saveRDS(scenicOptions, file="int/scenicOptions.Rds") 
+
+# filter genes -----------
+exprMat_t <- as.matrix(exprMat_t)
+genesKept <- geneFiltering(exprMat_t, scenicOptions=scenicOptions,
+                           minCountsPerGene=3*.01*ncol(exprMat_t),
+                           minSamples=ncol(exprMat_t)*.01)
+
+# check if any interested genes are missing ---
+interestingGenes <- c("EGR1", "NR4A1", "NFKBIA")
+interestingGenes[which(!interestingGenes %in% genesKept)]
+
+exprMat_t_filtered <- exprMat_t[genesKept, ]
+saveRDS(exprMat_t_filtered,file='exprMat_t_filtered.rds')
+rm(exprMat_t)
+
+# correlation -----
+runCorrelation(exprMat_t_filtered, scenicOptions)
+
+# Run GENIE3
+exprMat_t_filtered <- log2(exprMat_t_filtered+1) 
+runGenie3(exprMat_t_filtered, scenicOptions, nParts = 20)
+
+# Build and score the GRN (runSCENIC_...)
+scenicOptions@settings$verbose <- TRUE
+scenicOptions@settings$nCores <- 10
+scenicOptions@settings$seed <- 123
+
+scenicOptions <- runSCENIC_1_coexNetwork2modules(scenicOptions)
+scenicOptions <- runSCENIC_2_createRegulons(scenicOptions,coexMethod=c("w0.005"))# or top10perTarget or top5perTarget
+scenicOptions <- runSCENIC_3_scoreCells(scenicOptions, exprMat_t_filtered)
+
+# check infered regulon --------
+
+regulon <- read.delim('./output/Step2_regulonTargetsInfo.tsv',header = T)
+
+length(unique(regulon$TF))
+
+regulonAUC <- readRDS('./Jurkat_regulonAUC.Rds')
+str(regulonAUC)
+regulonAUC <-regulonAUC@assays@data@listData$AUC
+regulonAUC_h <- regulonAUC[!grepl('_extended',rownames(regulonAUC)), ]
+regulonAUC_h_sti <- regulonAUC_h[,1:748]
+regulonAUC_h_unsti <- regulonAUC_h[,749:981]
+
+regulonAUC_h_sti <- rowSums(regulonAUC_h_sti)/748
+regulonAUC_h_sti <- unlist(regulonAUC_h_sti)
+
+regulonAUC_h_unsti <- rowSums(regulonAUC_h_unsti)/233
+regulonAUC_h_unsti <- unlist(regulonAUC_h_unsti)
+
+comb <- as.data.frame(cbind(regulonAUC_h_unsti,regulonAUC_h_sti)) 
+comb_norm <- comb/comb$regulonAUC_h_unsti
+colnames(comb_norm) <- c('unsti','stimu')
+
+pdf("regulon_total.pdf",width=1.77,height=1.77*2) # 1.77 in = 45 mm 
+
+p <- Heatmap(comb_norm,
+             #col = col_fun,
+             name = " ", #title of legend
+             #column_title = "cells", row_title = "regulon",
+             row_names_gp = gpar(fontsize = 5), # Text size for row names
+             cluster_rows = TRUE,
+             show_row_dend = FALSE,
+             cluster_columns = FALSE,
+             show_row_names = TRUE,
+             show_column_names = TRUE,
+             #column_title_rot = 90,
+             column_names_gp = gpar(fontsize = 5),
+             heatmap_legend_param = list(title_gp = gpar(fontsize = 5, fontface = "bold"),grid_height = unit(1, "mm"),grid_width = unit(1, "mm"),labels_gp = gpar(fontsize = 4))
+             #row_split = group,
+             #top_annotation = ha,
+             #width = unit(3, "cm"), height = unit(3, "cm")
+)
+
+draw(p)
+dev.off()
+
+```
+
+```{r fig2e}
+# find differentially expressed regulon -----
+library(Seurat)
+library(dplyr)
+
+regulonAUC <- readRDS('./total_RNA/int/3.4_regulonAUC.Rds')
+str(regulonAUC)
+regulonAUC <-regulonAUC@assays@data@listData$AUC
+
+regulonAUC_s <- CreateSeuratObject(counts=regulonAUC, project='regulon', min.cells = 3,names.field = 1,
+                                   names.delim = "_",)
+DER.markers <- FindMarkers(regulonAUC_s, ident.2 ='unsti',min.pct = 0.1, ident.1 ='sti', test.use="wilcox",logfc.threshold = F)
+
+DER.markers_h <- DER.markers[!grepl('-extended',rownames(DER.markers)), ] %>% arrange(desc(avg_log2FC))
+DER.markers_top10 <- DER.markers_h[1:10, ]
+
+# plot the activity of top5 differentially expressed regulon ------
+BiocManager::install("ComplexHeatmap")
+BiocManager::install("circlize")
+####################################################################
+library(ComplexHeatmap)
+library(circlize)
+####################################################################
+reg_activity <- regulonAUC[rownames(regulonAUC) %in% rownames(DER.markers_top10), ]
+group <- c(rep('sti',748), rep('unsti',233))
+group <- factor(group,levels = c('unsti','sti'))
+col_fun = colorRamp2(c(0,0.2,0.6), c("black",'white', "red"))
+
+ha = HeatmapAnnotation(bar = group,col = list(bar = c("sti" = "red", "unsti" = "black")),
+                       simple_anno_size = unit(0.2, "cm"),
+                       annotation_legend_param = list(bar = list(title = "type", title_gp = gpar(fontsize = 6), 
+                                                                  labels_gp = gpar(fontsize = 5),
+                                                                    at = c("sti", "unsti"),
+                                                                      labels = c("sti", "unsti"))))
+
+pdf("Regulonactivity_TOP10.pdf",width=1.77*1.5,height=1.77) # 1.77 in = 45 mm 
+
+p <- Heatmap(reg_activity,
+        col = col_fun,
+        name = " ", #title of legend
+        column_title = "cells", row_title = "regulon",
+        row_names_gp = gpar(fontsize = 5), # Text size for row names
+        cluster_rows = TRUE,
+        show_row_dend = FALSE,
+        cluster_columns = FALSE,
+        show_row_names = TRUE,
+        show_column_names = FALSE,
+        column_names_gp = gpar(fontsize = 5),
+        heatmap_legend_param = list(title_gp = gpar(fontsize = 5, fontface = "bold"),grid_height = unit(1, "mm"),grid_width = unit(1, "mm"),labels_gp = gpar(fontsize = 4)),
+        column_split = group,
+        top_annotation = ha
+        #width = unit(3, "cm"), height = unit(3, "cm")
+)
+draw(p,show_annotation_legend = FALSE)
+dev.off()
+
+```
+

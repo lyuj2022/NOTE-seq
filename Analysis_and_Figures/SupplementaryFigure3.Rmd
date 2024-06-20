@@ -1,0 +1,212 @@
+---
+title: "Supplementary Figure3"
+author: "Lyu"
+date: "2024-06-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(scales)
+```
+
+```{r SF 3a-d}
+# sample parameters --------------------------------
+
+# plot T to C incorporation rate after correction
+p_q_sti <- read.csv('./Djurkat_sti_pq.txt',header = F,sep = " ")
+p_q_lab <- read.csv('./Djurkat_lab_pq.txt',header = F,sep = " ")
+
+p_q_sti <- as.data.frame(t(p_q_sti))
+p_q_sti$V2 <-as.numeric(p_q_sti$V2)
+p_q_sti$V2 <- 100*p_q_sti$V2
+p_q_sti$V3 <- c('new','old')
+p_q_sti$V4 <- rep('sti',2)
+
+p_q_lab <- as.data.frame(t(p_q_lab))
+p_q_lab$V2 <-as.numeric(p_q_lab$V2)
+p_q_lab$V2 <- 100*p_q_lab$V2
+p_q_lab$V3 <- c('new','old')
+p_q_lab$V4 <- rep('unsti',2)
+
+p_q <- rbind(p_q_lab,p_q_sti)
+
+# ---------------
+theme_man <- 
+  theme_classic() +
+  theme(
+    axis.text.y = element_text(size=6),
+    axis.text.x = element_text(size = 6),
+    axis.title = element_text(colour='black', size=7),
+    legend.title=element_blank(),
+    legend.key=element_blank(),
+    axis.line.x = element_line(colour = "black", size=0.25),
+    axis.line.y = element_line(colour = "black", size=0.25),
+    axis.ticks.x = element_line(colour = "black", size = 0.25),
+    axis.ticks.y = element_line(colour = "black", size = 0.25)
+  )
+# ---------------
+
+p <- p_q %>% ggplot(mapping = aes(x = V4 , y = V2, fill= V3)) + 
+  geom_bar(position="dodge",stat = "identity") +
+  scale_fill_manual(values=c('red',"#999999"))+theme_man + 
+  theme(legend.position = c(0.2, .95),
+        legend.key.size = unit(0.1, "cm"),
+        legend.key.width = unit(0.1, "cm"),
+        legend.text = element_text(size=6))+
+  xlab(" ")+
+  ylab("Corrected coversion rate (%)")+
+  geom_hline(yintercept = 0.2, linetype = "dashed",linewidth=0.25)+
+  geom_hline(yintercept = 2.0, linetype = "dashed",,linewidth=0.25)+
+  scale_y_continuous(breaks = c(0.15,2), labels = c("0.15",'2'))+
+  ylim(0,3)
+
+
+ggsave(filename = "corrected conversion rate_sti_unsti.pdf",plot = p,width=45,height = 45,units = "mm", dpi = 300)
+
+# reads and UMI------
+lab_rgu <- readRDS('lab_reads_UMI_gene_fil.rds')
+sti_rgu <- readRDS('sti_reads_UMI_gene_fil.rds')
+
+# select cells---
+Sti_BC <- read.table('./Sti_BC.txt',sep = '\t',row.names = F,col.names = F,quote = F)
+lab_BC <- read.table('./lab_BC.txt',sep = '\t',row.names = F,col.names = F,quote = F)
+Sti_BC_ <- gsub('-1','',Sti_BC)
+lab_BC_ <- gsub('-1','',lab_BC)
+lab_rgu <- lab_rgu[lab_rgu$cell %in% lab_BC_, ]
+sti_rgu <- sti_rgu[sti_rgu$cell %in% Sti_BC_, ]
+
+merg_rgu <- rbind(lab_rgu,sti_rgu)
+
+# to add median on boxplot 
+p_meds <- merg_rgu%>% group_by(type) %>% summarise(med = median(Reads))
+
+p <- merg_rgu %>%  ggplot( aes(x=type, y=Reads, fill=type)) +    
+  geom_boxplot(lwd=0.25,outlier.colour = NA, width=0.75, fatten=1)+
+  #geom_jitter(shape=16, position=position_jitter(0.2))+
+  theme_classic() +
+  theme(
+    axis.text.y = element_text(size=6),
+    axis.text.x = element_text(size = 6),
+    axis.title = element_text(colour='black', size=7),
+    legend.title=element_blank(),
+    legend.key=element_blank(),
+    legend.position = c(0.35, 0.95),
+    legend.text = element_text(size=6),
+    legend.key.size = unit(0.1, "cm"),
+    legend.key.width = unit(0.1, "cm"),
+    axis.line.x = element_line(colour = "black", size=0.25),
+    axis.line.y = element_line(colour = "black", size=0.25),
+    axis.ticks.x = element_line(colour = "black", size = 0.25),
+    axis.ticks.y = element_line(colour = "black", size = 0.25)
+) +
+  geom_text(data = p_meds, aes(x = type, y = med, label = med), 
+            size = 6/.pt, vjust = -1)+
+  ylim(0,200000)+
+  scale_fill_discrete(labels=c("sti(n=1932)","unsti(n=392)"))+
+  ylab('Sequencing reads')+
+  xlab('')
+
+ggsave(filename = "median_reads.pdf",plot = p,width=45,height = 45,units = "mm", dpi = 300)
+
+
+# detection rate ----
+lab_alph <- read.delim('Djurkat_lab_alpha.txt',header=F,sep = ' ')
+lab_alph$type <- rep('unsti',392)
+
+sti_alph <- read.delim('Djurkat_sti_alpha.txt',header=F,sep = ' ')
+sti_alph$type <- rep('sti',1932)
+
+meg_alpha <- rbind(lab_alph,sti_alph)
+
+# to add median on boxplot 
+p_meds_alpha <- meg_alpha%>% group_by(type) %>% summarise(med = round(median(V2),2))
+
+p <- meg_alpha %>%  ggplot( aes(x=type, y=V2, fill=type)) +    
+  geom_boxplot(lwd=0.25,outlier.colour = NA, width=0.75, fatten=1)+
+  #geom_jitter(shape=16, position=position_jitter(0.2))+
+  theme_classic() +
+  theme(
+    axis.text.y = element_text(size=6),
+    axis.text.x = element_text(size = 6),
+    axis.title = element_text(colour='black', size=7),
+    legend.title=element_blank(),
+    legend.key=element_blank(),
+    legend.position = c(0.5, 0.95),
+    legend.text = element_text(size=6),
+    legend.key.size = unit(0.1, "cm"),
+    legend.key.width = unit(0.1, "cm"),
+    axis.line.x = element_line(colour = "black", size=0.25),
+    axis.line.y = element_line(colour = "black", size=0.25),
+    axis.ticks.x = element_line(colour = "black", size = 0.25),
+    axis.ticks.y = element_line(colour = "black", size = 0.25)
+  ) +
+  geom_text(data = p_meds_alpha, aes(x = type, y = med, label = med), 
+            size = 5/.pt, vjust = -1)+
+  scale_fill_discrete(labels=c("sti(n=1932)","unsti(n=392)"))+
+  ylab("newly synthesized RNA detection rate")+
+  xlab('')
+
+ggsave(filename = "alpha.pdf",plot = p,width=45,height = 45,units = "mm", dpi = 300)
+
+
+# nascent reads percentage ----
+# sti ----
+sti_new_rna <- readRDS('sti_new_rna')
+sti_old_rna <- readRDS('sti_old_rna')
+
+sti_total_rna <- sti_new_rna+sti_old_rna
+
+sti_total_rna <- sti_total_rna[rowSums(sti_total_rna>0) > 0.05*ncol(sti_total_rna), ]  
+sti_new_rna_ <- sti_new_rna[rownames(sti_new_rna) %in% rownames(sti_total_rna), ]
+
+sti_nascent_ration_gene <-as.data.frame(rowSums(sti_new_rna_)/rowSums(sti_total_rna)) 
+colnames(sti_nascent_ration_gene) <- 'new_RNA_frac'
+sti_nascent_ration_gene$type <- rep('sti',nrow(sti_nascent_ration_gene))
+
+# lab ----
+lab_new_rna <- readRDS('lab_new_rna')
+lab_old_rna <- readRDS('lab_old_rna')
+
+lab_total_rna <- lab_new_rna+lab_old_rna
+
+lab_total_rna <- lab_total_rna[rowSums(lab_total_rna>0) > 0.05*ncol(lab_total_rna), ]  
+lab_new_rna_ <- lab_new_rna[rownames(lab_new_rna) %in% rownames(lab_total_rna), ]
+
+lab_nascent_ration_gene <-as.data.frame(rowSums(lab_new_rna_)/rowSums(lab_total_rna)) 
+colnames(lab_nascent_ration_gene) <- 'new_RNA_frac'
+lab_nascent_ration_gene$type <- rep('unsti',nrow(lab_nascent_ration_gene))
+lab_nascent_ration_gene <- lab_nascent_ration_gene[rownames(lab_nascent_ration_gene) %in% rownames(sti_nascent_ration_gene), ]
+meg_nascentRNA_fraction <- rbind(lab_nascent_ration_gene,sti_nascent_ration_gene)
+
+# to add median on boxplot 
+p_meds_nascent_rna_fraction <- meg_nascentRNA_fraction%>% group_by(type) %>% summarise(med = round(median(new_RNA_frac),2))
+
+p <- meg_nascentRNA_fraction %>%  ggplot( aes(x=type, y=new_RNA_frac, fill=type)) +    
+  geom_boxplot(lwd=0.25,outlier.colour = NA, width=0.75, fatten=1)+
+  theme_classic() +
+  theme(
+    axis.text.y = element_text(size=6),
+    axis.text.x = element_text(size = 6),
+    axis.title = element_text(colour='black', size=7),
+    legend.title=element_blank(),
+    legend.key=element_blank(),
+    legend.position = c(0.4, 0.95),
+    legend.text = element_text(size=6),
+    legend.key.size = unit(0.1, "cm"),
+    legend.key.width = unit(0.1, "cm"),
+    axis.line.x = element_line(colour = "black", size=0.25),
+    axis.line.y = element_line(colour = "black", size=0.25),
+    axis.ticks.x = element_line(colour = "black", size = 0.25),
+    axis.ticks.y = element_line(colour = "black", size = 0.25)
+  ) +
+  geom_text(data = p_meds_nascent_rna_fraction, aes(x = type, y = med, label = med), 
+            size = 5/.pt, vjust = -1)+
+  scale_fill_discrete(labels=c("sti(n=11068)","unsti(n=12023)"))+
+  ylab("newly synthesized RNA fraction (per gene)")+
+  xlab('')
+
+ggsave(filename = "nascentRNA_fraction.pdf",plot = p,width=45,height = 45,units = "mm", dpi = 300)
+
+```
+
