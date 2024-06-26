@@ -1,7 +1,7 @@
 - This data analysis pipeline is adapted from scNT-seq and Well-TEMP-seq, including reads extraction from 10Xgenomics bam file, T-C reads subtraction, T-C background subtraction, reads counting and statistic correction.
 
 - Pre-install requirment: cellranger ( > version 7.0), samtools, sam2tsv, perl, Rscript, python
-- Run step 1- 6 on a no-4sU treatment, no-conertion sample to generate background T-C mutation pattern which will be used in step 8.
+- Run step 1- 6 on a no-4sU treatment, no-conversion sample to generate a background T-C mutation pattern which will be used in step 8.
 
 0. cellranger workflow
 
@@ -9,7 +9,7 @@
 # use a dummy data (sample) for demonstration
 
 0.1 retrieve fastq file 
-# download sequencing data from sequencing service provider
+# download sequencing data from the sequencing service provider
 wget "http://cleversafetest.nci.nih.gov/SEQ37V/NEXTSEQ2000/221218_VH00687_137_AAATWNFHV.tar?Signature=lxwNZ2l%2FdZPuHCmgilQ%2BtTWo%2F9I%3D&Expires=1672650742&AWSAccessKeyId=l6JcnKaAlMCbhfDQpECs" -O 221218_VH00687_137_AAATWNFHV_Data.tar
 
 # Untar files in Current Directory ##
@@ -23,7 +23,7 @@ f – File name type of the archive file.
 1, download the simple samplesheet from 10X or use IEM samplesheet.
 2, change the index information
 For example, with the Dual Index Kit TT Set A, well A1 can be specified in the sample sheet as "SI-TT-A1", and cellranger mkfastq will recognize the i7 and i5 indices as GTAACATGCG and AGTGTTACCT, respectively. Similarly for Single Index Kit T Set A, well A1 can be specified in the sample sheet as "SI-GA-A1", and cellranger mkfastq will recognize the four i7 indexes (GGTTTACT, CTAAACGG, TCGGCGTC, and AACCGTAA) and merge the resulting FASTQ files.
-3, specify the lane. Can be either a single lane, a range (e.g., 2-4) or "*" for all lanes in the flow cell.
+3, specify the lane. It can be either a single lane, a range (e.g., 2-4) or "*" for all lanes in the flow cell.
 
 # run mkfastq
 cellranger mkfastq --id=samplefq \
@@ -58,7 +58,7 @@ cellranger count --id=count_eHAP1 \
    --localcores=$SLURM_CPUS_PER_TASK \
    --localmem=120
 
-# this step takes some time. I use the swarm command on biowulf.
+# This step takes some time. I use the swarm command on biowulf.
 
 # command annotations     
    --id Cell Ranger creates an output directory that is named using this id. 
