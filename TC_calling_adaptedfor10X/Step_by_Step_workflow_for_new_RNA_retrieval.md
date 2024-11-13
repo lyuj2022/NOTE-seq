@@ -148,7 +148,7 @@ awk '{if ($2 ==0 && $6=="C" && $9=="T") print $0; else if ( $2==16 && $6=="G" &&
 perl /data/lyuj2/TC_calling_adaptedfor10X/scripts/extrac_refT_readC.pl -tsv sample_both_strand_all_TC.tsv -qual 27
 ```
 
-7. QC output: summarise the all types of mutation rate
+7. QC output: summarise all types of mutation rate
 
 ```shell
 perl /data/lyuj2/TC_calling_adaptedfor10X/scripts/extrac_conversion_frequency_gene_annotate.pl -read sample_filterd_ann_read.txt -tsv sample_both_strand_all.tsv -qual 27
