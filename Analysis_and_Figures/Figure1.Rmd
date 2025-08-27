@@ -97,7 +97,7 @@ ggsave(filename = "reg_and_4sU_correlation.pdf",plot = p,width=45,height = 45,un
 
 ```
 
-```{r T to C convertion ratio of new RNA}
+```{r T to C conversion ratio of new RNA}
 # load dataset and subset ATCG info.
 
 stat.info <- read.delim('./4sU_both_strand_all.tsv_q27_gene_anno_stat.txt',header = F)
