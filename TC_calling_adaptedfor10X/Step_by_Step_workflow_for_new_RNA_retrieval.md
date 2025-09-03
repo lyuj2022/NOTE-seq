@@ -1,7 +1,7 @@
-- This data analysis pipeline is adapted from scNT-seq and Well-TEMP-seq, including reads extraction from 10Xgenomics bam file, T-C reads subtraction, T-C background subtraction, reads counting and statistic correction.
+- This data analysis pipeline is adapted from scNT-seq and Well-TEMP-seq, including reads extraction from 10Xgenomics bam file, T-C reads subtraction, T-C background subtraction, reads counting and statistical correction.
 
 - Pre-install requirment: cellranger ( > version 7.0), samtools, sam2tsv, perl, Rscript, python
-- Run step 1- 6 on a no-4sU treatment, no-conversion sample to generate a background T-C mutation pattern which will be used in step 8.
+- Run step 1- 6 on a no-4sU treatment, no-conversion sample to generate a background T-C mutation pattern which will be used at step 8.
 
 0. cellranger workflow
 
