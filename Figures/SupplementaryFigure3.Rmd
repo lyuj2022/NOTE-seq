@@ -1,0 +1,304 @@
+---
+title: "Supplementary Figure3"
+author: "Lyu"
+date: "2025-09-20"
+output: html_document
+---
+```{r,sf 3}
+# sample parameters --------------------------------
+# reads and UMI------
+lab_rgu <- readRDS('lab_reads_UMI_gene_fil.rds')
+sti_rgu <- readRDS('sti_reads_UMI_gene_fil.rds')
+
+# select cells---
+lab_rgu <- lab_rgu[lab_rgu$cell %in% lab_BC_, ]
+sti_rgu <- sti_rgu[sti_rgu$cell %in% Sti_BC_, ]
+
+merg_rgu <- rbind(lab_rgu,sti_rgu)
+
+# to add median on boxplot 
+p_meds <- merg_rgu%>% group_by(type) %>% summarise(med = median(Reads))
+
+p <- merg_rgu %>%  ggplot( aes(x=type, y=Reads, fill=type)) +    
+  geom_boxplot(lwd=0.25,outlier.colour = NA, width=0.75, fatten=1)+
+  #geom_jitter(shape=16, position=position_jitter(0.2))+
+  theme_classic() +
+  theme(
+    axis.text.y = element_text(size=6),
+    axis.text.x = element_text(size = 6),
+    axis.title = element_text(colour='black', size=7),
+    legend.title=element_blank(),
+    legend.key=element_blank(),
+    legend.position = c(0.35, 0.95),
+    legend.text = element_text(size=6),
+    legend.key.size = unit(0.1, "cm"),
+    legend.key.width = unit(0.1, "cm"),
+    axis.line.x = element_line(colour = "black", size=0.25),
+    axis.line.y = element_line(colour = "black", size=0.25),
+    axis.ticks.x = element_line(colour = "black", size = 0.25),
+    axis.ticks.y = element_line(colour = "black", size = 0.25)
+) +
+  geom_text(data = p_meds, aes(x = type, y = med, label = med), 
+            size = 6/.pt, vjust = -0.5)+
+  ylim(0,200000)+
+  scale_fill_discrete(labels=c("sti(n=2296)","unsti(n=1842)"))+
+  ylab('Sequencing reads')+
+  xlab('')
+
+ggsave(filename = "median_reads.pdf",plot = p,width=45,height = 45,units = "mm", dpi = 300)
+
+# detection rate ----
+lab_alph <- read.delim('lab_alpha.txt',header=F,sep = ' ')
+lab_alph$type <- rep('unsti',1385)
+
+sti_alph <- read.delim('Sti_alpha.txt',header=F,sep = ' ')
+sti_alph$type <- rep('sti',2123)
+
+meg_alpha <- rbind(lab_alph,sti_alph)
+
+# to add median on boxplot 
+p_meds_alpha <- meg_alpha%>% group_by(type) %>% summarise(med = round(median(V2),2))
+
+p <- meg_alpha %>%  ggplot( aes(x=type, y=V2, fill=type)) +    
+  geom_boxplot(lwd=0.25,outlier.colour = NA, width=0.75, fatten=1)+
+  #geom_jitter(shape=16, position=position_jitter(0.2))+
+  theme_classic() +
+  theme(
+    axis.text.y = element_text(size=6),
+    axis.text.x = element_text(size = 6),
+    axis.title = element_text(colour='black', size=7),
+    legend.title=element_blank(),
+    legend.key=element_blank(),
+    legend.position = c(0.5, 0.95),
+    legend.text = element_text(size=6),
+    legend.key.size = unit(0.1, "cm"),
+    legend.key.width = unit(0.1, "cm"),
+    axis.line.x = element_line(colour = "black", size=0.25),
+    axis.line.y = element_line(colour = "black", size=0.25),
+    axis.ticks.x = element_line(colour = "black", size = 0.25),
+    axis.ticks.y = element_line(colour = "black", size = 0.25)
+  ) +
+  geom_text(data = p_meds_alpha, aes(x = type, y = med, label = med), 
+            size = 5/.pt, vjust = -1)+
+  scale_fill_discrete(labels=c("sti(n=2123)","unsti(n=1385)"))+
+  ylab("nascent RNA detection rate")+
+  xlab('')
+
+ggsave(filename = "alpha.pdf",plot = p,width=45,height = 45,units = "mm", dpi = 300)
+
+
+# nascent reads percentage ----
+# sti -------
+sti_new_rna <- read.csv('./JurkatComparison/Sti_pre_new.csv',row.names = 1)
+sti_old_rna <- read.csv('./JurkatComparison/Sti_pre_old.csv',row.names = 1)
+
+sti_total_rna <- sti_new_rna+sti_old_rna
+
+sti_total_rna <- sti_total_rna[rowSums(sti_total_rna>0) > 0.05*ncol(sti_total_rna), ]  
+sti_new_rna_ <- sti_new_rna[rownames(sti_new_rna) %in% rownames(sti_total_rna), ]
+
+
+sti_nascent_ration_gene <-as.data.frame(rowSums(sti_new_rna_)/rowSums(sti_total_rna)) 
+colnames(sti_nascent_ration_gene) <- 'new_RNA_frac'
+sti_nascent_ration_gene$type <- rep('sti',nrow(sti_nascent_ration_gene))
+
+# lab ----
+lab_new_rna <- read.csv('./JurkatComparison/lab_pre_new.csv',row.names = 1)
+lab_old_rna <- read.csv('./JurkatComparison/lab_pre_old.csv',row.names = 1)
+
+lab_total_rna <- lab_new_rna+lab_old_rna
+
+lab_total_rna <- lab_total_rna[rowSums(lab_total_rna>0) > 0.05*ncol(lab_total_rna), ]  
+lab_new_rna_ <- lab_new_rna[rownames(lab_new_rna) %in% rownames(lab_total_rna), ]
+
+lab_nascent_ration_gene <-as.data.frame(rowSums(lab_new_rna_)/rowSums(lab_total_rna)) 
+colnames(lab_nascent_ration_gene) <- 'new_RNA_frac'
+lab_nascent_ration_gene$type <- rep('unsti',nrow(lab_nascent_ration_gene))
+lab_nascent_ration_gene <- lab_nascent_ration_gene[rownames(lab_nascent_ration_gene) %in% rownames(sti_nascent_ration_gene), ]
+meg_nascentRNA_fraction <- rbind(lab_nascent_ration_gene,sti_nascent_ration_gene)
+
+# to add median on boxplot 
+p_meds_nascent_rna_fraction <- meg_nascentRNA_fraction%>% group_by(type) %>% summarise(med = round(median(new_RNA_frac),2))
+#my_comparisons <- list( c("sti", "unsti"))
+p <- meg_nascentRNA_fraction %>%  ggplot( aes(x=type, y=new_RNA_frac, fill=type)) +    
+  geom_boxplot(lwd=0.25,outlier.colour = NA, width=0.75, fatten=1)+
+  #stat_compare_means(comparisons =my_comparisons,size=2)+
+  theme_classic() +
+  theme(
+    axis.text.y = element_text(size=6),
+    axis.text.x = element_text(size = 6),
+    axis.title = element_text(colour='black', size=7),
+    legend.title=element_blank(),
+    legend.key=element_blank(),
+    legend.position = c(0.4, 0.95),
+    legend.text = element_text(size=6),
+    legend.key.size = unit(0.1, "cm"),
+    legend.key.width = unit(0.1, "cm"),
+    axis.line.x = element_line(colour = "black", size=0.25),
+    axis.line.y = element_line(colour = "black", size=0.25),
+    axis.ticks.x = element_line(colour = "black", size = 0.25),
+    axis.ticks.y = element_line(colour = "black", size = 0.25)
+  ) +
+  geom_text(data = p_meds_nascent_rna_fraction, aes(x = type, y = med, label = med), 
+            size = 5/.pt, vjust = -1)+
+  scale_fill_discrete(labels=c("sti(n=1297)","unsti(n=12564)"))+
+  ylab("nascent RNA fraction (per gene)")+
+  xlab('')
+
+ggsave(filename = "nascentRNA_fraction.pdf",plot = p,width=45,height = 45,units = "mm", dpi = 300)
+
+# plot gene and UMI detection number, total vs. new for sti and lab
+
+sti_total_UMI <- colSums(sti_total_rna) 
+sti_new_UMI <- colSums(sti_new_rna_) 
+
+df_UMI <- data.frame(
+  Detected = c(sti_total_UMI, sti_new_UMI),
+  Dataset = rep(c("Total", "New"), c(length(sti_total_UMI), length(sti_new_UMI)))
+)
+
+# to add median on boxplot 
+p_meds_sti_UMI <- df_UMI%>% group_by(Dataset) %>% summarise(med = round(median(Detected),2))
+p <- df_UMI %>%  ggplot( aes(x=Dataset, y=Detected, fill=Dataset)) +    
+  geom_boxplot(lwd=0.25,outlier.colour = NA, width=0.75, fatten=1)+
+  #geom_jitter(shape=16, position=position_jitter(0.2))+
+  theme_classic() +
+  theme(
+    axis.text.y = element_text(size=6),
+    axis.text.x = element_text(size = 6),
+    axis.title = element_text(colour='black', size=7),
+    legend.title=element_blank(),
+    legend.key=element_blank(),
+    legend.position = "none",
+    legend.text = element_text(size=6),
+    legend.key.size = unit(0.1, "cm"),
+    legend.key.width = unit(0.1, "cm"),
+    axis.line.x = element_line(colour = "black", size=0.25),
+    axis.line.y = element_line(colour = "black", size=0.25),
+    axis.ticks.x = element_line(colour = "black", size = 0.25),
+    axis.ticks.y = element_line(colour = "black", size = 0.25)
+  ) +
+  scale_y_log10()+
+  geom_text(data = p_meds_sti_UMI, aes(x = Dataset, y = med, label = med), 
+            size = 5/.pt, vjust = 1)+
+  #scale_fill_discrete(labels=c("sti(n=1932)","unsti(n=392)"))+
+  ylab("UMI numbers per cell")+
+  xlab('')
+
+ggsave(filename = "sti_UMI detection.pdf",plot = p,width=45,height = 45,units = "mm", dpi = 300)
+
+
+lab_total_UMI <- colSums(lab_total_rna) 
+lab_new_UMI <- colSums(lab_new_rna_) 
+
+df_UMI_lab <- data.frame(
+  Detected = c(lab_total_UMI, lab_new_UMI),
+  Dataset = rep(c("Total", "New"), c(length(lab_total_UMI), length(lab_new_UMI)))
+)
+
+p_meds_lab_UMI <- df_UMI_lab%>% group_by(Dataset) %>% summarise(med = round(median(Detected),2))
+p <- df_UMI_lab %>%  ggplot( aes(x=Dataset, y=Detected, fill=Dataset)) +    
+  geom_boxplot(lwd=0.25,outlier.colour = NA, width=0.75, fatten=1)+
+  #geom_jitter(shape=16, position=position_jitter(0.2))+
+  theme_classic() +
+  theme(
+    axis.text.y = element_text(size=6),
+    axis.text.x = element_text(size = 6),
+    axis.title = element_text(colour='black', size=7),
+    legend.title=element_blank(),
+    legend.key=element_blank(),
+    legend.position = "none",
+    legend.text = element_text(size=6),
+    legend.key.size = unit(0.1, "cm"),
+    legend.key.width = unit(0.1, "cm"),
+    axis.line.x = element_line(colour = "black", size=0.25),
+    axis.line.y = element_line(colour = "black", size=0.25),
+    axis.ticks.x = element_line(colour = "black", size = 0.25),
+    axis.ticks.y = element_line(colour = "black", size = 0.25)
+  ) +
+  scale_y_log10()+
+  geom_text(data = p_meds_lab_UMI, aes(x = Dataset, y = med, label = med), 
+            size = 5/.pt, vjust = 1.5)+
+  #scale_fill_discrete(labels=c("sti(n=1932)","unsti(n=392)"))+
+  ylab("UMI numbers per cell")+
+  xlab('')
+
+ggsave(filename = "lab_UMI detection.pdf",plot = p,width=45,height = 45,units = "mm", dpi = 300)
+
+## gene
+sti_total_gene <- colSums(sti_total_rna > 0) 
+sti_new_gene <- colSums(sti_new_rna_ > 0) 
+
+df_gene <- data.frame(
+  Detected = c(sti_total_gene, sti_new_gene),
+  Dataset = rep(c("Total", "New"), c(length(sti_total_gene), length(sti_new_gene)))
+)
+
+p_meds_sti_gene <- df_gene%>% group_by(Dataset) %>% summarise(med = round(median(Detected),2))
+p <- df_gene %>%  ggplot( aes(x=Dataset, y=Detected, fill=Dataset)) +    
+  geom_boxplot(lwd=0.25,outlier.colour = NA, width=0.75, fatten=1)+
+  #geom_jitter(shape=16, position=position_jitter(0.2))+
+  theme_classic() +
+  theme(
+    axis.text.y = element_text(size=6),
+    axis.text.x = element_text(size = 6),
+    axis.title = element_text(colour='black', size=7),
+    legend.title=element_blank(),
+    legend.key=element_blank(),
+    legend.position = "none",
+    legend.text = element_text(size=6),
+    legend.key.size = unit(0.1, "cm"),
+    legend.key.width = unit(0.1, "cm"),
+    axis.line.x = element_line(colour = "black", size=0.25),
+    axis.line.y = element_line(colour = "black", size=0.25),
+    axis.ticks.x = element_line(colour = "black", size = 0.25),
+    axis.ticks.y = element_line(colour = "black", size = 0.25)
+  ) +
+  scale_y_log10()+
+  geom_text(data = p_meds_sti_gene, aes(x = Dataset, y = med, label = med), 
+  size = 5/.pt, vjust = 1)+
+  #scale_fill_discrete(labels=c("sti(n=1932)","unsti(n=392)"))+
+  ylab("Gene numbers per cell")+
+  xlab('')
+
+ggsave(filename = "sti_gene detection.pdf",plot = p,width=45,height = 45,units = "mm", dpi = 300)
+
+lab_total_gene <- colSums(lab_total_rna > 0) 
+lab_new_gene <- colSums(lab_new_rna_ > 0) 
+
+df_gene_lab <- data.frame(
+  Detected = c(lab_total_gene, lab_new_gene),
+  Dataset = rep(c("Total", "New"), c(length(lab_total_gene), length(lab_new_gene)))
+)
+
+p_meds_lab_gene <- df_gene_lab%>% group_by(Dataset) %>% summarise(med = round(median(Detected),2))
+p <- df_gene_lab %>%  ggplot( aes(x=Dataset, y=Detected, fill=Dataset)) +    
+  geom_boxplot(lwd=0.25,outlier.colour = NA, width=0.75, fatten=1)+
+  #geom_jitter(shape=16, position=position_jitter(0.2))+
+  theme_classic() +
+  theme(
+    axis.text.y = element_text(size=6),
+    axis.text.x = element_text(size = 6),
+    axis.title = element_text(colour='black', size=7),
+    legend.title=element_blank(),
+    legend.key=element_blank(),
+    legend.position = "none",
+    legend.text = element_text(size=6),
+    legend.key.size = unit(0.1, "cm"),
+    legend.key.width = unit(0.1, "cm"),
+    axis.line.x = element_line(colour = "black", size=0.25),
+    axis.line.y = element_line(colour = "black", size=0.25),
+    axis.ticks.x = element_line(colour = "black", size = 0.25),
+    axis.ticks.y = element_line(colour = "black", size = 0.25)
+  ) +
+  scale_y_log10()+
+  geom_text(data = p_meds_lab_gene, aes(x = Dataset, y = med, label = med), 
+  size = 5/.pt, vjust = 1)+
+  #scale_fill_discrete(labels=c("sti(n=1932)","unsti(n=392)"))+
+  ylab("gene numbers per cell (log10)")+
+  xlab('')
+
+ggsave(filename = "lab_gene detection.pdf",plot = p,width=45,height = 45,units = "mm", dpi = 300)
+
+```
+

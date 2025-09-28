@@ -1,0 +1,430 @@
+---
+title: "SF2"
+author: "Lyu"
+date: "2024-06-17"
+output: html_document
+---
+
+```{r libraries}
+library(Seurat)
+library(tidyverse)
+library(scales)
+```
+
+```{r,  SF1e}
+library(tidyverse)
+library(scales)
+
+# comparison with SLAMseq data
+noteseq <- readRDS('../NOTEseq_nascent.rds')
+colnames(noteseq) <- c('Name','noteseq') 
+
+slamseq <- readRDS('../Control1_nascent.rds')
+colnames(slamseq) <- c('Name','slamseq')
+
+merged <- full_join(slamseq, noteseq, by = "Name") %>%
+  filter(!(slamseq == 0 & noteseq == 0))
+
+#random sample 2000 genes for plotting
+RN <- nrow(merged)
+RS <- sample(RN, size=5000, replace =F)
+RNAS <- merged[RS,]
+
+theme_man <- 
+  theme_classic() +
+  theme(
+    axis.text.y = element_text(size=6),
+    axis.text.x = element_text(size = 6),
+    axis.title = element_text(colour='black', size=7),
+    legend.title=element_blank(),
+    legend.key=element_blank(),
+    axis.line.x = element_line(colour = "black", size=0.25),
+    axis.line.y = element_line(colour = "black", size=0.25),
+    axis.ticks.x = element_line(colour = "black", size = 0.25),
+    axis.ticks.y = element_line(colour = "black", size = 0.25))
+
+p <- RNAS%>% ggplot(aes(x=slamseq, y= noteseq))+
+  geom_point(size=0.1)+
+  #remove background
+  theme_man+
+  scale_x_log10() +
+  scale_y_log10(labels=number_format(accuracy = 1, scale = 1)) +
+  annotation_logticks(sides = "bl", size=0.15, short = unit(0.05, "cm"), mid = unit(0.1, "cm"), long = unit(0.15, "cm")) +
+  annotate(geom="text",x=10, y=4000, label="PCC=0.80",size=2)+
+  #xlim(0, 9)+
+  #ylim(0, 9)+
+  #change x and y labels
+  xlab("SLAMseq counts")+  
+  ylab("NOTEseq counts")
+cor(log1p(merged$slamseq),log1p(merged$noteseq),method = 'pearson')
+ggsave(filename = "noteseqvsslamseq.pdf",plot = p,width=45,height = 45,units = "mm", dpi = 300)
+
+```
+
+
+
+```{r cell cycle, follow figure1 for the alldata object }
+s.genes <- cc.genes.updated.2019$s.genes # cc.genes.updated.2019 is the newly updated gene sets for cell cycle scoring
+g2m.genes <- cc.genes.updated.2019$g2m.genes
+
+sc_cc_reg <- subset(alldata, subset = orig.ident == '10Xreg')
+sc_cc_reg <- subset(sc_cc_reg, nCount_RNA > 10000 & nCount_RNA < 50000 & percent_mito < 5)
+sc_cc_reg <- NormalizeData(sc_cc_reg)
+sc_cc_reg <- FindVariableFeatures(sc_cc_reg, selection.method = "vst")
+sc_cc_reg <- ScaleData(sc_cc_reg, features = rownames(sc_cc))
+sc_cc_reg <- RunPCA(sc_cc_reg, features = c(s.genes, g2m.genes))
+ncol(sc_cc_reg)
+
+sc_cc_note <- subset(alldata, subset = orig.ident == '10X4sU')
+sc_cc_note <- subset(sc_cc_note, nCount_RNA > 10000 & nCount_RNA < 50000 & percent_mito < 5)
+sc_cc_note <- NormalizeData(sc_cc_note)
+sc_cc_note <- FindVariableFeatures(sc_cc_note, selection.method = "vst")
+sc_cc_note <- ScaleData(sc_cc_note, features = rownames(sc_cc))
+sc_cc_note <- RunPCA(sc_cc_note, features = c(s.genes, g2m.genes))
+ncol(sc_cc_note)
+
+DimPlot(sc_cc_reg, reduction = "pca", group.by = "Phase")
+DimPlot(sc_cc_note, reduction = "pca", group.by = "Phase")
+
+sc_cc_note <- CellCycleScoring(sc_cc_note, s.features = s.genes, g2m.features = g2m.genes, set.ident = TRUE)
+sc_cc_reg <- CellCycleScoring(sc_cc_reg, s.features = s.genes, g2m.features = g2m.genes, set.ident = TRUE)
+
+
+#cehck cell# in each cell stage
+cc_reg <- table(sc_cc_reg[[]]$Phase)
+G1 G2M   S 
+438 600 422  
+
+cc_note <- table(sc_cc_note[[]]$Phase)
+G1 G2M   S 
+314 528 536 
+
+cc <- rbind(cc_reg,cc_note)
+cc <- as.data.frame(cc)
+t <- rowSums(cc)
+cc$G1 <- (100*cc$G1)/t
+cc$S <- (100*cc$S)/t
+cc$G2M <- (100*cc$G2M)/t
+cc$type <- rownames(cc)
+
+cc <- cc %>% pivot_longer(!type, names_to = 'name', values_to = 'value')
+cc$name <- factor(cc$name,levels = c('G1','S','G2M'))
+
+p <- ggplot(cc, aes(x = type, y = value, fill = name)) +
+  geom_bar(stat = "identity") +
+  labs(title = " ",
+       x = " ",
+       y = "cell phase (%)") +
+  scale_fill_manual(values = c("G1" = "#1976D2", "S" = "#E0E0E0", "G2M" = "#F44336")) +
+  theme_classic() +
+  theme(
+    axis.text.y = element_text(size=6),
+    axis.text.x = element_text(size = 6),
+    axis.title = element_text(colour='black', size=7),
+    legend.title=element_blank(),
+    legend.key=element_blank(),
+    #legend.position = c(0.2, 0.8),
+    legend.key.size = unit(0.1,"cm"),
+    legend.key.width = unit(0.1,"cm"),
+    legend.text = element_text(size=6),
+    axis.line.x = element_line(colour = "black", size=0.25),
+    axis.line.y = element_line(colour = "black", size=0.25),
+    axis.ticks.x = element_line(colour = "black", size = 0.25),
+    axis.ticks.y = element_line(colour = "black", size = 0.25)
+  )
+
+ggsave(filename = "cellcyle.pdf",plot = p,width=45,height = 45*1.5,units = "mm", dpi = 300)
+
+```
+
+```{r follow figure1 for total_rna}
+# get normalization factors from total RNA
+total_rna <- new_rna+old_rna
+D4sU <- CreateSeuratObject(counts = total_rna, project = "NOTEseq")
+
+# Normalized data is required
+D4sU <- NormalizeData(D4sU)
+# retrieve normalized data
+total.mat <- GetAssayData(D4sU, slot = "data") 
+
+# calculate normalization factors and normalize new_rna dataset
+normalization_factors <- colSums(total_rna)
+new.mat <- as.data.frame(new_rna*10000/normalization_factors) 
+
+# Assign Cell-Cycle Scores based on total_rna dataset
+D4sU <- CellCycleScoring(D4sU, s.features = s.genes, g2m.features = g2m.genes, set.ident = TRUE)
+# Extract active identities
+identities <- Idents(D4sU)
+expression_matri.total <- total.mat
+expression_matri.new <- new.mat
+
+# Convert the expression matrix to a data frame for aggregation
+expr_df.total <- as.data.frame(t(as.matrix(expression_matri.total)))
+expr_df.new <- as.data.frame(t(as.matrix(expression_matri.new)))
+
+# Add the identities as a new column to the data frame
+expr_df.total$Identity <- identities
+expr_df.total$Identity <- factor(expr_df.total$Identity, levels = c('G1','S','G2M'))
+expr_df.new$Identity <- identities
+expr_df.new$Identity <- factor(expr_df.new$Identity, levels = c('G1','S','G2M'))
+
+# take the average of gene expression for each gene by active identity
+mean_expr.total <- aggregate(. ~ Identity, data = expr_df.total, mean)
+rownames(mean_expr.total) <- mean_expr.total[,1]
+mean_expr.total <- mean_expr.total[,-1]
+str(mean_expr.total)
+
+mean_expr.new <- aggregate(. ~ Identity, data = expr_df.new, mean)
+rownames(mean_expr.new) <- mean_expr.new[,1]
+mean_expr.new <- mean_expr.new[,-1]
+str(mean_expr.new)
+
+# selected marker gene --
+g1.select <- c('E2F1','CDC6','RB1')
+s.select <- c('RAD51','PCNA','NASP')
+g2m.select <- c('BUB1','ANLN','CDCA3')
+
+
+# G1 ---------
+
+######## total
+# Transpose the result to have genes as rows and identities as columns (optional)
+mean_expr.total <- t(mean_expr.total)
+mean_expr.total <- as.data.frame(mean_expr.total)
+total.g1 <- mean_expr.total[rownames(mean_expr.total) %in% g1.select, ]
+total.g1 <- as.matrix(total.g1)
+
+# Manually scale and center the data
+mat <- total.g1
+mat_scaled = t(apply(mat, 1, scale))
+colnames(mat_scaled) <- c('G1','S','G2-M')
+
+### plot heatmap
+col_fun = colorRamp2(c(-2,0,2), c("#1976D2",'#E0E0E0', "#F44336"))
+
+pdf("Select_total_G1_totalnorm.pdf",width=1.77,height=1.77/2) # 1.77 in = 45 mm 
+
+p <- Heatmap(mat_scaled,
+             col = col_fun,
+             name = " ", #title of legend
+             #column_title = "cells", row_title = "regulon",
+             row_names_gp = gpar(fontsize = 5), # Text size for row names
+             cluster_rows = TRUE,
+             show_row_dend = FALSE,
+             cluster_columns = FALSE,
+             show_row_names = TRUE,
+             show_column_names = TRUE,
+             #column_title_rot = 0,
+             column_names_gp = gpar(fontsize = 5),
+             heatmap_legend_param = list(title_gp = gpar(fontsize = 5, fontface = "bold"),grid_height = unit(1, "mm"),grid_width = unit(1, "mm"),labels_gp = gpar(fontsize = 4))
+             #row_split = group,
+             #top_annotation = ha,
+             #width = unit(3, "cm"), height = unit(3, "cm")
+)
+draw(p)
+dev.off()
+
+# get the row order of the heatmap
+row_order <- row_order(p)
+row_order <-unlist(row_order)
+
+######## new
+# Transpose the result to have genes as rows and identities as columns (optional)
+mean_expr.new <- t(mean_expr.new)
+mean_expr.new <- as.data.frame(mean_expr.new)
+new.g1 <- mean_expr.new[rownames(mean_expr.new) %in% g1.select, ]
+new.g1 <- as.matrix(new.g1)
+
+# Manually scale and center the data
+mat <- new.g1
+mat_scaled = t(apply(mat, 1, scale))
+colnames(mat_scaled) <- c('G1','S','G2-M')
+
+# reorder the maxtrix
+mat_scaled <- mat_scaled[row_order, ]
+
+pdf("Select_new_G1_totalnorm.pdf",width=1.77,height=1.77/2) # 1.77 in = 45 mm 
+ht <- Heatmap(mat_scaled,
+              col = col_fun,
+              name = " ", #title of legend
+              #column_title = "cells", row_title = "regulon",
+              row_names_gp = gpar(fontsize = 5), # Text size for row names
+              cluster_rows = FALSE,
+              cluster_columns = FALSE,
+              show_row_names = TRUE,
+              show_column_names = TRUE,
+              #column_title_rot = 0,
+              column_names_gp = gpar(fontsize = 5),
+              heatmap_legend_param = list(title_gp = gpar(fontsize = 5, fontface = "bold"),grid_height = unit(1, "mm"),grid_width = unit(1, "mm"),labels_gp = gpar(fontsize = 4))
+              #row_split = group,
+              #top_annotation = ha,
+              #width = unit(3, "cm"), height = unit(3, "cm")
+)
+
+draw(ht)
+dev.off()
+
+
+# S ---------
+
+######## total
+# Transpose the result to have genes as rows and identities as columns (optional)
+#mean_expr.old <- t(mean_expr.old)
+#mean_expr.old <- as.data.frame(mean_expr.old)
+total.s <- mean_expr.total[rownames(mean_expr.total) %in% s.select, ]
+total.s <- as.matrix(total.s)
+
+# Manually scale and center the data
+mat <- total.s
+mat_scaled = t(apply(mat, 1, scale))
+colnames(mat_scaled) <- c('G1','S','G2-M')
+
+### plot heatmap
+col_fun = colorRamp2(c(-2,0,2), c("#1976D2",'#E0E0E0', "#F44336"))
+
+pdf("Select_total_s.totalnorm.pdf",width=1.77,height=1.77/2) # 1.77 in = 45 mm 
+
+p <- Heatmap(mat_scaled,
+             col = col_fun,
+             name = " ", #title of legend
+             #column_title = "cells", row_title = "regulon",
+             row_names_gp = gpar(fontsize = 5), # Text size for row names
+             cluster_rows = TRUE,
+             show_row_dend = FALSE,
+             cluster_columns = FALSE,
+             show_row_names = TRUE,
+             show_column_names = TRUE,
+             #column_title_rot = 0,
+             column_names_gp = gpar(fontsize = 5),
+             heatmap_legend_param = list(title_gp = gpar(fontsize = 5, fontface = "bold"),grid_height = unit(1, "mm"),grid_width = unit(1, "mm"),labels_gp = gpar(fontsize = 4))
+             #row_split = group,
+             #top_annotation = ha,
+             #width = unit(3, "cm"), height = unit(3, "cm")
+)
+draw(p)
+dev.off()
+
+# get the row order of the heatmap
+row_order <- row_order(p)
+row_order <-unlist(row_order)
+
+######## new
+# Transpose the result to have genes as rows and identities as columns (optional)
+#mean_expr.new <- t(mean_expr.new)
+#mean_expr.new <- as.data.frame(mean_expr.new)
+new.s <- mean_expr.new[rownames(mean_expr.new) %in% s.select, ]
+new.s <- as.matrix(new.s)
+
+# Manually scale and center the data
+mat <- new.s
+mat_scaled = t(apply(mat, 1, scale))
+colnames(mat_scaled) <- c('G1','S','G2-M')
+
+# reorder the maxtrix
+mat_scaled <- mat_scaled[row_order, ]
+
+pdf("Select_new_s.totalnorm.pdf",width=1.77,height=1.77/2) # 1.77 in = 45 mm 
+ht <- Heatmap(mat_scaled,
+              col = col_fun,
+              name = " ", #title of legend
+              #column_title = "cells", row_title = "regulon",
+              row_names_gp = gpar(fontsize = 5), # Text size for row names
+              cluster_rows = FALSE,
+              cluster_columns = FALSE,
+              show_row_names = TRUE,
+              show_column_names = TRUE,
+              #column_title_rot = 0,
+              column_names_gp = gpar(fontsize = 5),
+              heatmap_legend_param = list(title_gp = gpar(fontsize = 5, fontface = "bold"),grid_height = unit(1, "mm"),grid_width = unit(1, "mm"),labels_gp = gpar(fontsize = 4))
+              #row_split = group,
+              #top_annotation = ha,
+              #width = unit(3, "cm"), height = unit(3, "cm")
+)
+
+draw(ht)
+dev.off()
+
+
+# G2-M ---------
+
+######## total
+# Transpose the result to have genes as rows and identities as columns (optional)
+#mean_expr.old <- t(mean_expr.old)
+#mean_expr.old <- as.data.frame(mean_expr.old)
+total.g2m <- mean_expr.total[rownames(mean_expr.total) %in% g2m.select, ]
+total.g2m <- as.matrix(total.g2m)
+
+# Manually scale and center the data
+mat <- total.g2m
+mat_scaled = t(apply(mat, 1, scale))
+colnames(mat_scaled) <- c('G1','S','G2-M')
+
+### plot heatmap
+col_fun = colorRamp2(c(-2,0,2), c("#1976D2",'#E0E0E0', "#F44336"))
+
+pdf("Select_total_g2m.totalnorm.pdf",width=1.77,height=1.77/2) # 1.77 in = 45 mm 
+
+p <- Heatmap(mat_scaled,
+             col = col_fun,
+             name = " ", #title of legend
+             #column_title = "cells", row_title = "regulon",
+             row_names_gp = gpar(fontsize = 5), # Text size for row names
+             cluster_rows = TRUE,
+             show_row_dend = FALSE,
+             cluster_columns = FALSE,
+             show_row_names = TRUE,
+             show_column_names = TRUE,
+             #column_title_rot = 0,
+             column_names_gp = gpar(fontsize = 5),
+             heatmap_legend_param = list(title_gp = gpar(fontsize = 5, fontface = "bold"),grid_height = unit(1, "mm"),grid_width = unit(1, "mm"),labels_gp = gpar(fontsize = 4))
+             #row_split = group,
+             #top_annotation = ha,
+             #width = unit(3, "cm"), height = unit(3, "cm")
+)
+draw(p)
+dev.off()
+
+# get the row order of the heatmap
+row_order <- row_order(p)
+row_order <-unlist(row_order)
+
+######## new
+# Transpose the result to have genes as rows and identities as columns (optional)
+#mean_expr.new <- t(mean_expr.new)
+#mean_expr.new <- as.data.frame(mean_expr.new)
+new.g2m <- mean_expr.new[rownames(mean_expr.new) %in% g2m.select, ]
+new.g2m <- as.matrix(new.g2m)
+
+# Manually scale and center the data
+mat <- new.g2m
+mat_scaled = t(apply(mat, 1, scale))
+colnames(mat_scaled) <- c('G1','S','G2-M')
+
+# reorder the maxtrix
+mat_scaled <- mat_scaled[row_order, ]
+
+pdf("Select_new_g2m.totalnorm.pdf",width=1.77,height=1.77/2) # 1.77 in = 45 mm 
+ht <- Heatmap(mat_scaled,
+              col = col_fun,
+              name = " ", #title of legend
+              #column_title = "cells", row_title = "regulon",
+              row_names_gp = gpar(fontsize = 5), # Text size for row names
+              cluster_rows = FALSE,
+              cluster_columns = FALSE,
+              show_row_names = TRUE,
+              show_column_names = TRUE,
+              #column_title_rot = 0,
+              column_names_gp = gpar(fontsize = 5),
+              heatmap_legend_param = list(title_gp = gpar(fontsize = 5, fontface = "bold"),grid_height = unit(1, "mm"),grid_width = unit(1, "mm"),labels_gp = gpar(fontsize = 4))
+              #row_split = group,
+              #top_annotation = ha,
+              #width = unit(3, "cm"), height = unit(3, "cm")
+)
+
+draw(ht)
+dev.off()
+
+
+
+```
+
