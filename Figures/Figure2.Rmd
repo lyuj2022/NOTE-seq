@@ -1,0 +1,548 @@
+---
+title: "figure2"
+author: "Lyu"
+date: "2025-09-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r, figure2 a-b}
+library(Seurat)
+library(tidyverse)
+library(scales)
+library("DropletUtils")
+
+# FA --------------
+
+mol.info.file <- 'FA_molecule_info.h5'
+MeOH_molinfo <- read10xMolInfo(mol.info.file)
+MeOH_reads <- as.data.frame(MeOH_molinfo$data)
+colnames(MeOH_reads)
+
+MeOH_reads[1:10,]
+MeOH_molinfo <- NULL
+MeOH_reads_UMI <- MeOH_reads %>% group_by(cell) %>% summarise(Reads = sum(reads),UMI =n())
+MeOH_cell_gene <- MeOH_reads[,c('cell','gene')] 
+MeOH_cell_gene <- MeOH_cell_gene %>% distinct()
+MeOH_cell_gene <- MeOH_cell_gene %>% group_by(cell) %>% summarise(Gene =n())
+
+MeOH_reads_UMI_gene <- inner_join(MeOH_reads_UMI,MeOH_cell_gene,by='cell')
+
+MeOH_reads_UMI_gene <- MeOH_reads_UMI_gene %>% arrange(desc(Reads))
+MeOH_reads_UMI_gene_fil <- MeOH_reads_UMI_gene[1:10000,]
+MeOH_reads_UMI_gene_fil$type <- rep('FA',10000)
+
+
+# MeOH_4sU ----------------
+
+mol.info.file <- 'MeOH_molecule_info.h5'
+MeOH_molinfo <- read10xMolInfo(mol.info.file)
+MeOH_reads <- as.data.frame(MeOH_molinfo$data)
+colnames(MeOH_reads)
+
+MeOH_reads[1:10,]
+MeOH_molinfo <- NULL
+MeOH_reads_UMI <- MeOH_reads %>% group_by(cell) %>% summarise(Reads = sum(reads),UMI =n())
+MeOH_cell_gene <- MeOH_reads[,c('cell','gene')] 
+MeOH_cell_gene <- MeOH_cell_gene %>% distinct()
+MeOH_cell_gene <- MeOH_cell_gene %>% group_by(cell) %>% summarise(Gene =n())
+
+MeOH_reads_UMI_gene <- inner_join(MeOH_reads_UMI,MeOH_cell_gene,by='cell')
+
+MeOH_reads_UMI_gene <- MeOH_reads_UMI_gene %>% arrange(desc(Reads))
+MeOH_reads_UMI_gene_fil <- MeOH_reads_UMI_gene[1:3000,]
+MeOH_reads_UMI_gene_fil$type <- rep('MeOH',3000)
+
+
+
+
+# merge ---
+FA_MeOH_comp <- rbind(FA_,FA_2nd_SS,MeOH_reads_UMI_gene_fil)
+
+FA_MeOH_comp <- as.data.frame(FA_MeOH_comp)
+str(FA_MeOH_comp)
+
+# compare UMI------
+sampleID <- c('FA','MeOH')
+
+predict.nUMI <- sapply(sampleID,function(u){
+  model1 <- lm(data = FA_MeOH_comp %>% filter(type == u),formula = UMI ~ Reads)
+  tmp <- predict(model1,data.frame(Reads=50000))
+  return(round(as.numeric(tmp),0))
+})
+
+
+df.extra2 <- data.frame(Reads=rep(50000,3),UMI=predict.nUMI)
+df.extra2$type <- rownames(df.extra2)
+
+p <- ggplot(FA_MeOH_comp,aes(Reads,UMI,col=type)) + geom_point(size=.2,shape=19,alpha=.3) + 
+  geom_smooth(method="lm",se=F,size=.25,linetype=2,aes(group=type),col="black") +
+  geom_vline(xintercept = 50000,col="grey30",linetype="dashed",linewidth=0.25) + 
+  theme_classic() +
+  theme(
+    axis.text.y = element_text(size=6),
+    axis.text.x = element_text(size = 6),
+    axis.title = element_text(colour='black', size=7),
+    legend.title=element_blank(),
+    legend.key=element_blank(),
+    legend.position = c(0.2, 0.8),
+    legend.key.size = unit(0.1,"cm"),
+    legend.key.width = unit(0.1,"cm"),
+    legend.text = element_text(size=6),
+    axis.line.x = element_line(colour = "black", size=0.25),
+    axis.line.y = element_line(colour = "black", size=0.25),
+    axis.ticks.x = element_line(colour = "black", size = 0.25),
+    axis.ticks.y = element_line(colour = "black", size = 0.25)
+   )+
+  geom_point(data = df.extra2) +
+  geom_text(data=df.extra2,aes(label=UMI),col="black",hjust=-.1,size=7/.pt) +
+  xlim(0, 100000)+
+  ylim(0, 50000)+
+  #change x and y labels
+  xlab("Reads")+  
+  ylab("numbers of UMI")
+ggsave(filename = "nUMI.pdf",plot = p,width=45,height = 45,units = "mm", dpi = 300)
+
+# compare gene------
+
+predict.nGene <- sapply(sampleID,function(u){
+  model1 <- loess(data = FA_MeOH_comp %>% filter(type == u),formula = Gene ~ Reads)
+  tmp <- predict(model1,data.frame(Reads=50000))
+  return(round(as.numeric(tmp),0))
+})
+
+
+df.extra <- data.frame(Reads=rep(50000,3),Gene=predict.nGene)
+df.extra['FA fixation','Gene'] <- 6688
+df.extra$type <- rownames(df.extra)
+
+
+FA_MeOH_compfil <- FA_MeOH_comp %>% filter(Reads <= 100000)
+p <- FA_MeOH_comp %>% ggplot(aes(Reads,Gene,col=type)) + geom_point(size=.2,shape=19,alpha=.3) + 
+  geom_smooth(method="loess",se=F,size=.25,linetype=2,aes(group=type),col="black") +
+  geom_vline(xintercept = 50000,col="grey30",linetype="dashed",linewidth=.25) + 
+  theme_classic() +
+  theme(
+    axis.text.y = element_text(size=6),
+    axis.text.x = element_text(size = 6),
+    axis.title = element_text(colour='black', size=7),
+    legend.title=element_blank(),
+    legend.key=element_blank(),
+    legend.position = c(0.2, 0.8),
+    legend.key.size = unit(0.1,"cm"),
+    legend.key.width = unit(0.1,"cm"),
+    legend.text = element_text(size=6),
+    axis.line.x = element_line(colour = "black", size=0.25),
+    axis.line.y = element_line(colour = "black", size=0.25),
+    axis.ticks.x = element_line(colour = "black", size = 0.25),
+    axis.ticks.y = element_line(colour = "black", size = 0.25)
+    )+
+  geom_point(data = df.extra) +
+  geom_text(data=df.extra,aes(label=Gene),col="black",hjust=-.1,size=7/.pt) +
+  xlim(0, 100000)+
+  #ylim(0, 75000)+
+  xlab("Reads")+  
+  ylab("numbers of gene")
+
+ggsave(filename = "nGene.pdf",plot = p,width=45,height = 45,units = "mm", dpi = 300)
+
+```
+
+```{r, figure2 c-d}
+# Load the dataset
+FA_old <- read.csv("./4sU_pre_old.csv",row.names = 1)
+FA_new <- read.csv("./4sU_pre_new.csv",row.names = 1)
+
+MeOH_old <- read.csv("./MeOH_pre_old.csv",row.names = 1)
+MeOH_new <- read.csv("./MeOH_pre_new.csv",row.names = 1)
+
+# select the genes captured in both pipeline
+FA_gene <- as.data.frame(rownames(FA_old))
+colnames(FA_gene) <- 'ID'
+MeOH_gene <- as.data.frame(rownames(MeOH_old))
+colnames(MeOH_gene) <- 'ID'
+
+gene_in_both <- inner_join(FA_gene,MeOH_gene, by='ID')
+
+#---old -----
+select_FA_old <- FA_old[rownames(FA_old) %in% gene_in_both$ID, ]
+mean_select_FA_old <-as.data.frame(rowSums(select_FA_old)/ncol(select_FA_old)) 
+colnames(mean_select_FA_old) <- 'FA_old'
+mean_select_FA_old$ID <- rownames(select_FA_old)
+
+select_MeOH_old <- MeOH_old[rownames(MeOH_old) %in% gene_in_both$ID, ]
+mean_select_MeOH_old <-as.data.frame(rowSums(select_MeOH_old)/ncol(select_MeOH_old)) 
+colnames(mean_select_MeOH_old) <- 'MeOH_old'
+mean_select_MeOH_old$ID <- rownames(select_MeOH_old)
+
+merg_FA_MeOH_mean <- inner_join(mean_select_FA_old,mean_select_MeOH_old, by='ID')
+merg_FA_MeOH_mean <- merg_FA_MeOH_mean %>%
+  filter(if_all(-ID, ~ . != 0))
+colnames(merg_FA_MeOH_mean)
+nrow(merg_FA_MeOH_mean)
+# plot correlation
+RN <- nrow(merg_FA_MeOH_mean)
+RS <- sample (RN, size=2000, replace =F)
+RNAS <- merg_FA_MeOH_mean[RS,]
+
+p <- RNAS%>% ggplot(aes(x=FA_old, y= MeOH_old))+
+  geom_point(size=0.1,alpha=.3)+
+  #remove background
+  theme_classic() +
+  theme(
+    axis.text.y = element_text(size=6),
+    axis.text.x = element_text(size = 6),
+    axis.title = element_text(colour='black', size=7),
+    legend.title=element_blank(),
+    legend.key=element_blank(),
+    axis.line.x = element_line(colour = "black", size=0.25),
+    axis.line.y = element_line(colour = "black", size=0.25),
+    axis.ticks.x = element_line(colour = "black", size = 0.25),
+    axis.ticks.y = element_line(colour = "black", size = 0.25),
+    strip.background=element_blank(),
+    strip.text=element_text(size=7))+
+  scale_x_log10(labels = label_number(accuracy = 0.001)) +
+  scale_y_log10(labels = label_number(accuracy = 0.001)) +
+  annotation_logticks(sides = "bl", size=0.15, short = unit(0.05, "cm"), mid = unit(0.1, "cm"), long = unit(0.15, "cm")) +
+  annotate(geom="text",x=0.01, y=100, label="PCC=0.91",size=2)+
+  #xlim(0, 10)+
+  #ylim(0, 10)+
+  #change x and y labels
+  xlab("FA_UMI (log10)")+  
+  ylab("MeOH_UMI (log10)")
+cor(log10(merg_FA_MeOH_mean$FA_old),log10(merg_FA_MeOH_mean$MeOH_old),method = 'pearson')
+ggsave(filename = "FA_and_MeOH_old_correlation.pdf",plot = p,width=45,height = 45,units = "mm", dpi = 300)
+
+#---new -----
+select_FA_new <- FA_new[rownames(FA_new) %in% gene_in_both$ID, ]
+mean_select_FA_new <-as.data.frame(rowSums(select_FA_new)/ncol(select_FA_new)) 
+colnames(mean_select_FA_new) <- 'FA_new'
+mean_select_FA_new$ID <- rownames(select_FA_new)
+
+select_MeOH_new <- MeOH_new[rownames(MeOH_new) %in% gene_in_both$ID, ]
+mean_select_MeOH_new <-as.data.frame(rowSums(select_MeOH_new)/ncol(select_MeOH_new)) 
+colnames(mean_select_MeOH_new) <- 'MeOH_new'
+mean_select_MeOH_new$ID <- rownames(select_MeOH_new)
+
+merg_FA_MeOH_mean <- inner_join(mean_select_FA_new,mean_select_MeOH_new, by='ID')
+merg_FA_MeOH_mean <- merg_FA_MeOH_mean %>%
+  filter(if_all(-ID, ~ . != 0))
+colnames(merg_FA_MeOH_mean)
+nrow(merg_FA_MeOH_mean)
+# plot correlation
+RN <- nrow(merg_FA_MeOH_mean)
+RS <- sample (RN, size=2000, replace =F)
+RNAS <- merg_FA_MeOH_mean[RS,]
+
+p <- RNAS%>% ggplot(aes(x=FA_new, y= MeOH_new))+
+  geom_point(size=0.1,alpha=.3)+
+  #remove background
+  theme_classic() +
+  theme(
+    axis.text.y = element_text(size=6),
+    axis.text.x = element_text(size = 6),
+    axis.title = element_text(colour='black', size=7),
+    legend.title=element_blank(),
+    legend.key=element_blank(),
+    axis.line.x = element_line(colour = "black", size=0.25),
+    axis.line.y = element_line(colour = "black", size=0.25),
+    axis.ticks.x = element_line(colour = "black", size = 0.25),
+    axis.ticks.y = element_line(colour = "black", size = 0.25),
+    strip.background=element_blank(),
+    strip.text=element_text(size=7))+
+  scale_x_log10(labels = label_number(accuracy = 0.01)) +
+  scale_y_log10(labels = label_number(accuracy = 0.01)) +
+  annotation_logticks(sides = "bl", size=0.15, short = unit(0.05, "cm"), mid = unit(0.1, "cm"), long = unit(0.15, "cm")) +
+  annotate(geom="text",x=0.01, y=10, label="PCC=0.78",size=2)+
+  #xlim(0, 10)+
+  #ylim(0, 10)+
+  #change x and y labels
+  xlab("FA_UMI")+  
+  ylab("MeOH_UMI")
+cor(log10(merg_FA_MeOH_mean$FA_new),log10(merg_FA_MeOH_mean$MeOH_new),method = 'pearson')
+ggsave(filename = "FA_and_MeOH_new_correlation.pdf",plot = p,width=45,height = 45,units = "mm", dpi = 300)
+
+# plot T to C mutation rate in FA and MeOH ----------
+
+FA_T2C <- 1.34 
+MeOH_T2C <- 0.29
+
+T2C_EI <-as.data.frame(rbind(FA=FA_T2C,MeOH=MeOH_T2C)) 
+T2C_EI$name <- rownames(T2C_EI)
+
+p <- ggplot(data = T2C_EI, mapping = aes(x = name , y = V1, fill= name)) + 
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values=c( 'red',"#999999"))+theme_man + 
+  theme(legend.position="none")+
+  xlab(" ")+
+  ylab("Conversion rate (%)")+
+  geom_hline(yintercept = 0.29, linetype = "dashed",linewidth=0.25)+
+  geom_hline(yintercept = 1.34, linetype = "dashed",,linewidth=0.25) +
+  scale_y_continuous(breaks = c(0.29, 1.34), labels = c("0.29", "1.34"))+
+  theme(axis.text.x = element_text(angle = 45, hjust = 0.8, vjust = 1))
+
+ggsave(filename = "MeOHvsFA_EI_nucleiotide conversion rate.pdf",plot = p,width=45/2,height = 45,units = "mm", dpi = 300)
+
+```
+
+
+```{r, figure2 e-f}
+library(Seurat)
+library(tidyverse)
+library(scales)
+library("DropletUtils")
+
+
+# check capture efficiency ------------------------------------------------
+
+# scNT-seq --------------
+scNTseq <- readRDS('./Fig6b.rds')
+scNTseq_ <- scNTseq %>% filter(orig.ident == "K562-4SU-TFEA" )
+scNTseq_2nd_SS <- scNTseq %>% filter(orig.ident == "K562-4SU-TFEA-N9")
+scNTseq_ <- scNTseq_[ ,c(4,5,2,1)]
+colnames(scNTseq_) <- c('cell','Reads','UMI','Gene')
+scNTseq_$type <- rep('scNT-seq',800)
+
+scNTseq_2nd_SS <- scNTseq_2nd_SS[ ,c(4,5,2,1)]
+colnames(scNTseq_2nd_SS) <- c('cell','Reads','UMI','Gene')
+scNTseq_2nd_SS$type <- rep('scNT-seq2nd_SS',800)
+
+# K562_4sU ----------------
+mol.info.file <- 'K562_molecule_info.h5'
+K562_molinfo <- read10xMolInfo(mol.info.file)
+K562_reads <- as.data.frame(K562_molinfo$data)
+colnames(K562_reads)
+
+K562_reads[1:10,]
+K562_molinfo <- NULL
+K562_reads_UMI <- K562_reads %>% group_by(cell) %>% summarise(Reads = sum(reads),UMI =n())
+K562_cell_gene <- K562_reads[,c('cell','gene')] 
+K562_cell_gene <- K562_cell_gene %>% distinct()
+K562_cell_gene <- K562_cell_gene %>% group_by(cell) %>% summarise(Gene =n())
+
+K562_reads_UMI_gene <- inner_join(K562_reads_UMI,K562_cell_gene,by='cell')
+
+K562_reads_UMI_gene <- K562_reads_UMI_gene %>% arrange(desc(Reads))
+K562_reads_UMI_gene_fil <- K562_reads_UMI_gene[1:3000,]
+K562_reads_UMI_gene_fil$type <- rep('NOTE-seq',3000)
+
+# merge ---
+FA_K562_comp <- rbind(scNTseq_,scNTseq_2nd_SS,K562_reads_UMI_gene_fil)
+
+FA_K562_comp <- as.data.frame(FA_K562_comp)
+str(FA_K562_comp)
+
+saveRDS(FA_K562_comp,file = 'FA_K562_comp.rds')
+
+# compare UMI------
+readRDS('FA_K562_comp.rds')
+sampleID <- c('scNT-seq','scNT-seq2nd_SS','NOTE-seq')
+
+predict.nUMI <- sapply(sampleID,function(u){
+  model1 <- lm(data = FA_K562_comp %>% filter(type == u),formula = UMI ~ Reads)
+  tmp <- predict(model1,data.frame(Reads=50000))
+  return(round(as.numeric(tmp),0))
+})
+
+
+df.extra2 <- data.frame(Reads=rep(50000,3),UMI=predict.nUMI)
+df.extra2$type <- rownames(df.extra2)
+
+p <- ggplot(FA_K562_comp,aes(Reads,UMI,col=type)) + geom_point(size=.2,shape=19,alpha=.3) + 
+  geom_smooth(method="lm",se=F,size=.25,linetype=2,aes(group=type),col="black") +
+  geom_vline(xintercept = 50000,col="grey30",linetype="dashed",linewidth=0.25) + 
+  theme_classic() +
+  theme(
+    axis.text.y = element_text(size=6),
+    axis.text.x = element_text(size = 6),
+    axis.title = element_text(colour='black', size=7),
+    legend.title=element_blank(),
+    legend.key=element_blank(),
+    legend.position = c(0.2, 0.8),
+    legend.key.size = unit(0.1,"cm"),
+    legend.key.width = unit(0.1,"cm"),
+    legend.text = element_text(size=6),
+    axis.line.x = element_line(colour = "black", size=0.25),
+    axis.line.y = element_line(colour = "black", size=0.25),
+    axis.ticks.x = element_line(colour = "black", size = 0.25),
+    axis.ticks.y = element_line(colour = "black", size = 0.25)
+   )+
+  geom_point(data = df.extra2) +
+  geom_text(data=df.extra2,aes(label=UMI),col="black",hjust=-.1,size=7/.pt) +
+  xlim(0, 100000)+
+  ylim(0, 50000)+
+  #change x and y labels
+  xlab("Reads")+  
+  ylab("numbers of UMI")
+ggsave(filename = "nUMI.pdf",plot = p,width=45*1,height = 45*1,units = "mm", dpi = 300)
+
+# compare gene------
+
+predict.nGene <- sapply(sampleID,function(u){
+  model1 <- loess(data = FA_K562_comp %>% filter(type == u),formula = Gene ~ Reads)
+  tmp <- predict(model1,data.frame(Reads=50000))
+  return(round(as.numeric(tmp),0))
+})
+
+
+df.extra <- data.frame(Reads=rep(50000,3),Gene=predict.nGene)
+df.extra$type <- rownames(df.extra)
+
+
+FA_K562_compfil <- FA_K562_comp %>% filter(Reads <= 100000)
+p <- FA_K562_comp %>% ggplot(aes(Reads,Gene,col=type)) + geom_point(size=.2,shape=19,alpha=.3) + 
+  geom_smooth(method="loess",se=F,size=.25,linetype=2,aes(group=type),col="black") +
+  geom_vline(xintercept = 50000,col="grey30",linetype="dashed",linewidth=.25) + 
+  theme_classic() +
+  theme(
+    axis.text.y = element_text(size=6),
+    axis.text.x = element_text(size = 6),
+    axis.title = element_text(colour='black', size=7),
+    legend.title=element_blank(),
+    legend.key=element_blank(),
+    legend.position = c(0.2, 0.8),
+    legend.key.size = unit(0.1,"cm"),
+    legend.key.width = unit(0.1,"cm"),
+    legend.text = element_text(size=6),
+    axis.line.x = element_line(colour = "black", size=0.25),
+    axis.line.y = element_line(colour = "black", size=0.25),
+    axis.ticks.x = element_line(colour = "black", size = 0.25),
+    axis.ticks.y = element_line(colour = "black", size = 0.25)
+    )+
+  geom_point(data = df.extra) +
+  geom_text(data=df.extra,aes(label=Gene),col="black",hjust=-.1,size=7/.pt) +
+  xlim(0, 100000)+
+  #ylim(0, 75000)+
+  xlab("Reads")+  
+  ylab("numbers of gene")
+
+ggsave(filename = "nGene.pdf",plot = p,width=45*1,height = 45*1,units = "mm", dpi = 300)
+
+```
+
+```{r, fig2 g-h}
+# Load the dataset
+scNTseq <- read.table(gzfile("../../GSM4512697_K562-4SU-TFEA-N9_C.txt.gz"), 
+                     header = TRUE,   # set TRUE if the file has a header row
+                     sep = "\t",      # adjust if it's not tab-delimited
+                     stringsAsFactors = FALSE)
+NOTEseq <- read.csv("../K562_pre_new.csv",row.names = 1)
+
+# select the genes captured in both pipeline
+scNTseq_gene <- as.data.frame(rownames(scNTseq))
+colnames(scNTseq_gene) <- 'ID'
+NOTEseq_gene <- as.data.frame(rownames(NOTEseq))
+colnames(NOTEseq_gene) <- 'ID'
+
+gene_in_both <- inner_join(scNTseq_gene,NOTEseq_gene, by='ID')
+
+#---new -----
+select_scNTseq <- scNTseq[rownames(scNTseq) %in% gene_in_both$ID, ]
+mean_select_scNTseq <-as.data.frame(rowSums(select_scNTseq)/ncol(select_scNTseq)) 
+colnames(mean_select_scNTseq) <- 'scNTseq'
+mean_select_scNTseq$ID <- rownames(select_scNTseq)
+
+select_NOTEseq <- NOTEseq[rownames(NOTEseq) %in% gene_in_both$ID, ]
+mean_select_NOTEseq <-as.data.frame(rowSums(select_NOTEseq)/ncol(select_NOTEseq)) 
+colnames(mean_select_NOTEseq) <- 'NOTEseq'
+mean_select_NOTEseq$ID <- rownames(select_NOTEseq)
+
+merg_scNTseq_NOTEseq_mean <- inner_join(mean_select_scNTseq,mean_select_NOTEseq, by='ID')
+merg_scNTseq_NOTEseq_mean <- merg_scNTseq_NOTEseq_mean %>%
+  filter(if_all(-ID, ~ . != 0))
+colnames(merg_scNTseq_NOTEseq_mean)
+nrow(merg_scNTseq_NOTEseq_mean)
+# plot correlation
+RN <- nrow(merg_scNTseq_NOTEseq_mean)
+RS <- sample (RN, size=2000, replace =F)
+RNAS <- merg_scNTseq_NOTEseq_mean[RS,]
+
+p <- RNAS%>% ggplot(aes(x=scNTseq, y= NOTEseq))+
+  geom_point(size=0.1,alpha=.3)+
+  #remove background
+  theme_classic() +
+  theme(
+    axis.text.y = element_text(size=6),
+    axis.text.x = element_text(size = 6),
+    axis.title = element_text(colour='black', size=7),
+    legend.title=element_blank(),
+    legend.key=element_blank(),
+    axis.line.x = element_line(colour = "black", size=0.25),
+    axis.line.y = element_line(colour = "black", size=0.25),
+    axis.ticks.x = element_line(colour = "black", size = 0.25),
+    axis.ticks.y = element_line(colour = "black", size = 0.25),
+    strip.background=element_blank(),
+    strip.text=element_text(size=7))+
+  scale_x_log10(labels = label_number(accuracy = 0.01)) +
+  scale_y_log10(labels = label_number(accuracy = 0.01)) +
+  annotation_logticks(sides = "bl", size=0.15, short = unit(0.05, "cm"), mid = unit(0.1, "cm"), long = unit(0.15, "cm")) +
+  annotate(geom="text",x=0.01, y=10, label="PCC=0.71",size=2)+
+  #xlim(0, 10)+
+  #ylim(0, 10)+
+  #change x and y labels
+  xlab("scNTseq_UMI")+  
+  ylab("NOTEseq_UMI")
+cor(log10(merg_scNTseq_NOTEseq_mean$scNTseq),log10(merg_scNTseq_NOTEseq_mean$NOTEseq),method = 'pearson')
+ggsave(filename = "scNTseq_and_NOTEseq_correlation.pdf",plot = p,width=45,height = 45,units = "mm", dpi = 300)
+
+
+# plot T to C mutation rate in scNTseq and NOTEseq ----------
+
+scNTseq_T2C <- 5.25 
+NOTEseq_T2C <- (10185883*100/150178879)
+
+T2C_EI <-as.data.frame(rbind(scNTseq=scNTseq_T2C,NOTEseq=NOTEseq_T2C)) 
+T2C_EI$name <- rownames(T2C_EI)
+
+theme_man <- 
+  theme_classic() +
+  theme(
+    axis.text.y = element_text(size=6),
+    axis.text.x = element_text(size = 6),
+    axis.title = element_text(colour='black', size=7),
+    legend.title=element_blank(),
+    legend.key=element_blank(),
+    axis.line.x = element_line(colour = "black", linewidth=0.25),
+    axis.line.y = element_line(colour = "black", linewidth=0.25),
+    axis.ticks.x = element_line(colour = "black", linewidth = 0.25),
+    axis.ticks.y = element_line(colour = "black", linewidth = 0.25))
+
+p <- ggplot(data = T2C_EI, mapping = aes(x = name , y = V1, fill= name)) + 
+  geom_bar(stat = "identity") +
+  scale_fill_manual(values=c( 'red',"#999999"))+theme_man + 
+  theme(legend.position="none")+
+  xlab(" ")+
+  ylab("Conversion rate (%)")+
+  geom_hline(yintercept = 5.25, linetype = "dashed",linewidth=0.25)+
+  geom_hline(yintercept = 6.78, linetype = "dashed",,linewidth=0.25) +
+  scale_y_continuous(breaks = c(5.25, 6.78), labels = c("5.25", "6.78"))+
+  theme(axis.text.x = element_text(angle = 45, hjust = 0.8, vjust = 1))
+
+ggsave(filename = "NOTEseqvsscNTseq_EI_nucleiotide conversion rate.pdf",plot = p,width=45/2,height = 45,units = "mm", dpi = 300)
+
+
+```
+

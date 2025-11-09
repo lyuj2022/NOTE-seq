@@ -1,0 +1,410 @@
+---
+title: "Figure4"
+author: "Lyu"
+date: "2024-06-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(SCENIC)
+library(tidyverse)
+library(scales)
+library(clusterProfiler)
+library(AnnotationDbi)
+library(org.Mm.eg.db)
+library(ComplexHeatmap)
+library(circlize)
+```
+
+```{r fig 4a}
+# load input from seurat QC ------
+exprMat_t <- readRDS('merged.total_counts.rds')
+
+# specify cell types -------
+cellInfo <- readRDS('orig.ident_all.rds')
+colnames(cellInfo) <- 'type'
+
+# initiate SCENIC setting ---------
+org <- "mgi" #hgnc or , or dmel
+dir.create("cisTarget_databases")# copy database under this folder
+dbDir <- "cisTarget_databases" # RcisTarget databases location
+myDatasetTitle <- "SCENIC_T cell quiencence exit" # choose a name for your analysis
+data(defaultDbNames)
+dbs <- defaultDbNames[[org]]
+#dbs <- c('500bp'="mm10__refseq-r80__500bp_up_and_100bp_down_tss.mc9nr.feather",'10kb'='mm10__refseq-r80__10kb_up_and_down_tss.mc9nr.feather')
+motifAnnotations_mgi <- motifAnnotations
+scenicOptions <- initializeScenic(org=org, dbDir=dbDir, dbs=dbs, datasetTitle=myDatasetTitle, nCores=10) 
+
+########################################################################
+
+scenicOptions@inputDatasetInfo$cellInfo <- cellInfo
+
+# Save to use at a later time...
+saveRDS(scenicOptions, file="int/scenicOptions.Rds") 
+
+# filter genes -----------
+exprMat_t <- as.matrix(exprMat_t)
+genesKept <- geneFiltering(exprMat_t, scenicOptions=scenicOptions,
+                           minCountsPerGene=3*.01*ncol(exprMat_t),
+                           minSamples=ncol(exprMat_t)*.01)
+
+exprMat_t_filtered <- exprMat_t[genesKept, ]
+saveRDS(exprMat_t_filtered,file='exprMat_t_filtered.rds')
+rm(exprMat_t)
+
+# correlation -----
+runCorrelation(exprMat_t_filtered, scenicOptions)
+
+# Run GENIE3
+exprMat_t_filtered <- log2(exprMat_t_filtered+1) 
+runGenie3(exprMat_t_filtered, scenicOptions, nParts = 20)
+
+# Build and score the GRN (runSCENIC_...)
+scenicOptions@settings$verbose <- TRUE
+scenicOptions@settings$nCores <- 10
+scenicOptions@settings$seed <- 123
+
+scenicOptions <- runSCENIC_1_coexNetwork2modules(scenicOptions)
+scenicOptions <- runSCENIC_2_createRegulons(scenicOptions,coexMethod=c("w0.005"))# or top10perTarget or top5perTarget
+scenicOptions <- runSCENIC_3_scoreCells(scenicOptions, exprMat_t_filtered)
+
+# plot average regulon activity -----
+regulonAUC <- readRDS('./int/3.4_regulonAUC.Rds')
+str(regulonAUC)
+regulonAUC <-regulonAUC@assays@data@listData$AUC
+reg_activity <- regulonAUC[rownames(regulonAUC) %in% rownames(DER.markers_8h), ]
+control_0h <- rowSums(reg_activity[ ,1:1014])/1014
+sti_2h <- rowSums(reg_activity[ ,1015:1823])/809
+sti_4h <- rowSums(reg_activity[ ,1824:2654])/831
+sti_6h <- rowSums(reg_activity[ ,2655:3670])/1016
+sti_8h <- rowSums(reg_activity[ ,3671:4029])/359
+1014+809+831+1016+359
+
+regulon_activity_Average <- cbind(control_0h,sti_2h,sti_4h,sti_6h,sti_8h)
+regulon_activity_Average <- regulon_activity_Average[match(rownames(DER.markers_8h),rownames(regulon_activity_Average)), ]
+
+# normalize data 
+mat <- regulon_activity_Average
+mat_scaled = t(apply(mat, 1, scale))
+colnames(mat_scaled) <- c('0h','2h','4h','6h','8h')
+
+group <- c(rep('0h',1014), rep('2h',809),rep('4h',831),rep('6h',1016),rep('8h',359))
+#group <- factor(group,levels = c('unsti','sti'))
+#col_fun = colorRamp2(c(0,0.2,0.6), c("black",'white', "red"))
+
+#ha = HeatmapAnnotation(bar = group,#col = list(bar = c("sti" = "red", "unsti" = "black")),
+                       #simple_anno_size = unit(0.5, "cm"))
+
+
+col_fun = colorRamp2(c(-2,0,2), c("#1976D2",'#E0E0E0', "#F44336"))
+
+pdf("AverageRegulonactivity.timecourse.pdf",width=1.77,height=1.77) # 1.77 in = 45 mm 
+p <- Heatmap(mat_scaled,
+             col = col_fun,
+             name = " ", #title of legend
+             #column_title = "cells", row_title = "regulon",
+             row_names_gp = gpar(fontsize = 5), # Text size for row names
+             cluster_rows = FALSE,
+             show_row_dend = FALSE,
+             cluster_columns = FALSE,
+             show_row_names = TRUE,
+             show_column_names = TRUE,
+             #column_title_rot = 0,
+             column_names_gp = gpar(fontsize = 5),
+             heatmap_legend_param = list(title_gp = gpar(fontsize = 5, fontface = "bold"),grid_height = unit(1, "mm"),grid_width = unit(1, "mm"),labels_gp = gpar(fontsize = 4))
+             #row_split = group,
+             #top_annotation = ha,
+             #width = unit(3, "cm"), height = unit(3, "cm")
+)
+
+draw(p)
+dev.off()
+
+```
+
+```{r fig 2b}
+# dataset from figure3 
+expr <- readRDS('expressionlevel.rds')
+expr <- as.data.frame(expr)
+Fli1_regulon <- readRDS('../GRN_analysis_mouse/fli1_regulon.rds')
+
+regulon_expr <- expr[rownames(expr) %in% Fli1_regulon, ]
+
+regulon_expr$ID <- rownames(regulon_expr)
+regulon_expr <- regulon_expr[order(regulon_expr$ID), ]
+regulon_expr$ID <- NULL
+regulon_expr_m <- as.matrix(regulon_expr)
+
+# Manually scale and center the data
+mat <- regulon_expr_m
+mat_scaled = t(apply(mat, 1, scale))
+colnames(mat_scaled) <- c('0h','2h','4h','6h','8h')
+col_fun = colorRamp2(c(-2,0,2), c("#1976D2",'#E0E0E0', "#F44336"))
+
+pdf("Fli1_regulon_expr.pdf",width=1.77,height=1.77*2.5) # 1.77 in = 45 mm 
+p <- Heatmap(mat_scaled,
+             col = col_fun,
+             name = " ", #title of legend
+             #column_title = "cells", row_title = "regulon",
+             row_names_gp = gpar(fontsize = 5), # Text size for row names
+             cluster_rows = TRUE,
+             show_row_dend = FALSE,
+             cluster_columns = FALSE,
+             show_row_names = TRUE,
+             show_column_names = TRUE,
+             #column_title_rot = 0,
+             column_names_gp = gpar(fontsize = 5),
+             heatmap_legend_param = list(title_gp = gpar(fontsize = 5, fontface = "bold"),grid_height = unit(1, "mm"),grid_width = unit(1, "mm"),labels_gp = gpar(fontsize = 4))
+             #row_split = group,
+             #top_annotation = ha,
+             #width = unit(3, "cm"), height = unit(3, "cm")
+)
+
+```
+
+
+```{r fig 4d}
+
+# load infered regulon --------
+regulon <- read.delim('./output/Step2_regulonTargetsInfo.tsv',header = T)
+Fli1_g <- regulon %>% filter(TF=='Fli1' & highConfAnnot =='TRUE')
+GO_result_new <- enrichGO(Fli1_g$gene, OrgDb = 'org.Mm.eg.db',keyType = 'SYMBOL',ont = 'BP',pvalueCutoff  = 0.01,qvalueCutoff  = 0.05)
+p <- barplot(GO_result_new, showCategory=10) + scale_fill_gradientn(colors = c( "#F44336","#1976D2")) +
+        theme_classic() +
+        theme(
+                axis.text.y = element_text(size=5),
+                axis.text.x = element_text(size = 6),
+                axis.title = element_text(colour='black', size=7),
+                legend.title=element_blank(),
+                legend.key=element_blank(),
+                legend.position = c(0.8, 0.5),
+                legend.key.size = unit(0.1, "cm"),
+                legend.key.width = unit(0.1, "cm"),
+                legend.text = element_text(size=4),
+                axis.line.x = element_line(colour = "black", size=0.25),
+                axis.line.y = element_line(colour = "black", size=0.25),
+                axis.ticks.x = element_line(colour = "black", size = 0.25),
+                axis.ticks.y = element_line(colour = "black", size = 0.25)
+        )+
+        xlab('Count')
+
+ggsave(filename = "Fli1_regulon_GO.pdf",plot = p,width=45*1.2,height = 45*1.2,units = "mm", dpi = 300)
+```
+
+
+
+```{r fig 4c}
+
+regulonAUC_s <- CreateSeuratObject(counts=regulonAUC, project='regulon', min.cells = 3,names.field =c(1,2),
+                                   names.delim = "_")
+
+table(Idents(regulonAUC_s))
+# 2h vs control
+DER.markers <- FindMarkers(regulonAUC_s, ident.2 ='control_total',min.pct = 0.1, ident.1 ='mouse_2h', test.use="wilcox",logfc.threshold = F)
+DER.markers_h <- DER.markers[!grepl('-extended',rownames(DER.markers)), ] %>% arrange(desc(avg_log2FC))
+# 4h vs control
+DER.markers_4 <- FindMarkers(regulonAUC_s, ident.2 ='control_total',min.pct = 0.1, ident.1 ='mouse_4h', test.use="wilcox",logfc.threshold = F)
+DER.markers_4h <- DER.markers_4[!grepl('-extended',rownames(DER.markers_4)), ] %>% arrange(desc(avg_log2FC))
+# 6h vs control
+DER.markers_6 <- FindMarkers(regulonAUC_s, ident.2 ='control_total',min.pct = 0.1, ident.1 ='mouse_6h', test.use="wilcox",logfc.threshold = F)
+DER.markers_6h <- DER.markers_6[!grepl('-extended',rownames(DER.markers_6)), ] %>% arrange(desc(avg_log2FC))
+# 8h vs control
+DER.markers_8 <- FindMarkers(regulonAUC_s, ident.2 ='control_total',min.pct = 0.1, ident.1 ='mouse_8h', test.use="wilcox",logfc.threshold = F)
+DER.markers_8h <- DER.markers_8[!grepl('-extended',rownames(DER.markers_8)), ] %>% arrange(desc(avg_log2FC))
+
+# merge FC--
+DER.markers_all_FC <- cbind(DER.markers_h,DER.markers_4h,DER.markers_6h,DER.markers_8h)
+DER.markers_all_FC <- DER.markers_all_FC[ ,c(2,7,12,17)]
+temp <- c(0,0,0,0,0,0,0,0,0)
+names(temp) <- rownames(DER.markers_all_FC)
+DER.markers_all_FC <- cbind(temp,DER.markers_all_FC)
+colnames(DER.markers_all_FC) <- c('0','2','4','6','8')
+DER.markers_all_FC$gene <- rownames(DER.markers_all_FC)
+
+#plot foldchanges 
+DER.markers_all_FC_L <- DER.markers_all_FC %>% pivot_longer(cols = '0':'8')
+
+p <- DER.markers_all_FC_L %>% ggplot(aes(x=name, y=value,group=gene, color=gene)) +
+        geom_line(size=0.25)+
+        geom_point(size=0.1)+
+        geom_hline(yintercept =0,linetype = "dashed",size=0.25)+
+        theme_classic() +
+        theme(
+                axis.text.y = element_text(size=6),
+                axis.text.x = element_text(size = 6),
+                axis.title = element_text(colour='black', size=7),
+                legend.title=element_blank(),
+                legend.key=element_blank(),
+                legend.key.size = unit(0.1, "cm"),
+                legend.key.width = unit(0.1, "cm"),
+                legend.text = element_text(size=6),
+                axis.line.x = element_line(colour = "black", linewidth=0.25),
+                axis.line.y = element_line(colour = "black", linewidth=0.25),
+                axis.ticks.x = element_line(colour = "black", linewidth = 0.25),
+                axis.ticks.y = element_line(colour = "black", linewidth = 0.25))+
+        
+        xlab("Time(h)")+
+        ylab("log2(FC)")
+
+ggsave(filename = "regulon_activity_FC.pdf",plot = p,width=45*1.5,height = 45,units = "mm", dpi = 300)
+
+
+```
+
+```{r SF 6a-c}
+
+# Nfkb1_regulon --------------
+Nfkb1_regulon <- readRDS('../GRN_analysis_mouse/Nfkb1_regulon.rds')
+
+regulon_expr <- expr[rownames(expr) %in% Nfkb1_regulon, ]
+
+regulon_expr$ID <- rownames(regulon_expr)
+regulon_expr <- regulon_expr[order(regulon_expr$ID), ]
+regulon_expr$ID <- NULL
+regulon_expr_m <- as.matrix(regulon_expr)
+
+# Manually scale and center the data
+mat <- regulon_expr_m
+mat_scaled = t(apply(mat, 1, scale))
+colnames(mat_scaled) <- c('0h','2h','4h','6h','8h')
+col_fun = colorRamp2(c(-2,0,2), c("#1976D2",'#E0E0E0', "#F44336"))
+
+pdf("Nfkb1_regulon_expr.pdf",width=1.77,height=1.77*2.5) # 1.77 in = 45 mm 
+p <- Heatmap(mat_scaled,
+             col = col_fun,
+             name = " ", #title of legend
+             #column_title = "cells", row_title = "regulon",
+             row_names_gp = gpar(fontsize = 5), # Text size for row names
+             cluster_rows = TRUE,
+             show_row_dend = FALSE,
+             cluster_columns = FALSE,
+             show_row_names = FALSE,
+             show_column_names = TRUE,
+             #column_title_rot = 0,
+             column_names_gp = gpar(fontsize = 5),
+             heatmap_legend_param = list(title_gp = gpar(fontsize = 5, fontface = "bold"),grid_height = unit(1, "mm"),grid_width = unit(1, "mm"),labels_gp = gpar(fontsize = 4))
+             #row_split = group,
+             #top_annotation = ha,
+             #width = unit(3, "cm"), height = unit(3, "cm")
+)
+
+draw(p)
+dev.off()
+
+# Nfkb2_regulon --------------
+Nfkb2_regulon <- readRDS('../GRN_analysis_mouse/Nfkb2_regulon.rds')
+
+regulon_expr <- expr[rownames(expr) %in% Nfkb2_regulon, ]
+
+regulon_expr$ID <- rownames(regulon_expr)
+regulon_expr <- regulon_expr[order(regulon_expr$ID), ]
+regulon_expr$ID <- NULL
+regulon_expr_m <- as.matrix(regulon_expr)
+
+# Manually scale and center the data
+mat <- regulon_expr_m
+mat_scaled = t(apply(mat, 1, scale))
+colnames(mat_scaled) <- c('0h','2h','4h','6h','8h')
+col_fun = colorRamp2(c(-2,0,2), c("#1976D2",'#E0E0E0', "#F44336"))
+
+pdf("Nfkb2_regulon_expr.pdf",width=1.77,height=1.77*2.5) # 1.77 in = 45 mm 
+p <- Heatmap(mat_scaled,
+             col = col_fun,
+             name = " ", #title of legend
+             #column_title = "cells", row_title = "regulon",
+             row_names_gp = gpar(fontsize = 5), # Text size for row names
+             cluster_rows = TRUE,
+             show_row_dend = FALSE,
+             cluster_columns = FALSE,
+             show_row_names = FALSE,
+             show_column_names = TRUE,
+             #column_title_rot = 0,
+             column_names_gp = gpar(fontsize = 5),
+             heatmap_legend_param = list(title_gp = gpar(fontsize = 5, fontface = "bold"),grid_height = unit(1, "mm"),grid_width = unit(1, "mm"),labels_gp = gpar(fontsize = 4))
+             #row_split = group,
+             #top_annotation = ha,
+             #width = unit(3, "cm"), height = unit(3, "cm")
+)
+
+draw(p)
+dev.off()
+
+
+# Klf3_regulon --------------
+Klf3_regulon <- readRDS('../GRN_analysis_mouse/Klf3_regulon.rds')
+
+regulon_expr <- expr[rownames(expr) %in% Klf3_regulon, ]
+
+regulon_expr$ID <- rownames(regulon_expr)
+regulon_expr <- regulon_expr[order(regulon_expr$ID), ]
+regulon_expr$ID <- NULL
+regulon_expr_m <- as.matrix(regulon_expr)
+
+# Manually scale and center the data
+mat <- regulon_expr_m
+mat_scaled = t(apply(mat, 1, scale))
+colnames(mat_scaled) <- c('0h','2h','4h','6h','8h')
+col_fun = colorRamp2(c(-2,0,2), c("#1976D2",'#E0E0E0', "#F44336"))
+
+pdf("Klf3_regulon_expr.pdf",width=1.77,height=1.77*2.5) # 1.77 in = 45 mm 
+p <- Heatmap(mat_scaled,
+             col = col_fun,
+             name = " ", #title of legend
+             #column_title = "cells", row_title = "regulon",
+             row_names_gp = gpar(fontsize = 5), # Text size for row names
+             cluster_rows = TRUE,
+             show_row_dend = FALSE,
+             cluster_columns = FALSE,
+             show_row_names = TRUE,
+             show_column_names = TRUE,
+             #column_title_rot = 0,
+             column_names_gp = gpar(fontsize = 5),
+             heatmap_legend_param = list(title_gp = gpar(fontsize = 5, fontface = "bold"),grid_height = unit(1, "mm"),grid_width = unit(1, "mm"),labels_gp = gpar(fontsize = 4))
+             #row_split = group,
+             #top_annotation = ha,
+             #width = unit(3, "cm"), height = unit(3, "cm")
+)
+
+draw(p)
+dev.off()
+
+
+# Stat1_regulon --------------
+Stat1_regulon <- readRDS('../GRN_analysis_mouse/Stat1_regulon.rds')
+
+regulon_expr <- expr[rownames(expr) %in% Stat1_regulon, ]
+
+regulon_expr$ID <- rownames(regulon_expr)
+regulon_expr <- regulon_expr[order(regulon_expr$ID), ]
+regulon_expr$ID <- NULL
+regulon_expr_m <- as.matrix(regulon_expr)
+
+# Manually scale and center the data
+mat <- regulon_expr_m
+mat_scaled = t(apply(mat, 1, scale))
+colnames(mat_scaled) <- c('0h','2h','4h','6h','8h')
+col_fun = colorRamp2(c(-2,0,2), c("#1976D2",'#E0E0E0', "#F44336"))
+
+pdf("Stat1_regulon_expr.pdf",width=1.77,height=1.77*2.5) # 1.77 in = 45 mm 
+p <- Heatmap(mat_scaled,
+             col = col_fun,
+             name = " ", #title of legend
+             #column_title = "cells", row_title = "regulon",
+             row_names_gp = gpar(fontsize = 5), # Text size for row names
+             cluster_rows = TRUE,
+             show_row_dend = FALSE,
+             cluster_columns = FALSE,
+             show_row_names = TRUE,
+             show_column_names = TRUE,
+             #column_title_rot = 0,
+             column_names_gp = gpar(fontsize = 5),
+             heatmap_legend_param = list(title_gp = gpar(fontsize = 5, fontface = "bold"),grid_height = unit(1, "mm"),grid_width = unit(1, "mm"),labels_gp = gpar(fontsize = 4))
+             #row_split = group,
+             #top_annotation = ha,
+             #width = unit(3, "cm"), height = unit(3, "cm")
+)
+
+draw(p)
+dev.off()
+```
+
